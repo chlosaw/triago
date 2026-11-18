@@ -1,4 +1,4 @@
-import type { AuthContext } from '../middleware/auth.js';
+import type { AuthContext } from '../middleware/auth.ts';
 
 declare global {
   namespace Express {
