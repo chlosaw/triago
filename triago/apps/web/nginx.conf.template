@@ -1,0 +1,49 @@
+# Rendered at container start by the nginx image's envsubst step: only ${PORT},
+# ${API_UPSTREAM} and ${TRUSTED_PROXY_CIDR} are replaced (defaults in the Dockerfile);
+# nginx's own $variables are left alone.
+server {
+  listen ${PORT};
+  root /usr/share/nginx/html;
+
+  # Don't advertise the nginx version; keep request bodies in line with the API's 100kb JSON limit.
+  server_tokens off;
+  client_max_body_size 128k;
+
+  # When a hosting platform's edge proxy sits in front of nginx, $remote_addr is the
+  # edge, not the visitor. Take the visitor's address from the last X-Forwarded-For
+  # entry, which the edge appended, but only from TRUSTED_PROXY_CIDR. The default
+  # (127.0.0.1/32) trusts no one, so with nothing in front a client cannot spoof it.
+  set_real_ip_from ${TRUSTED_PROXY_CIDR};
+  real_ip_header X-Forwarded-For;
+  real_ip_recursive off;
+
+  # SendGrid Inbound Parse posts up to 30 MB (attachments included); the API skips
+  # attachments and decides what to keep, so let the whole request through.
+  location /api/inbound/ {
+    client_max_body_size 31m;
+    proxy_pass http://${API_UPSTREAM};
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location /api/ {
+    proxy_pass http://${API_UPSTREAM};
+    proxy_set_header Host $host;
+    # Overwrite, don't append: the API trusts exactly this one hop (TRUST_PROXY=1),
+    # so the client must not be able to slip its own address into the list.
+    # After set_real_ip_from above, $remote_addr is the visitor, not the edge proxy.
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  location / {
+    # The SPA loads only its own bundles plus Google Fonts and talks only to /api.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    try_files $uri /index.html;
+  }
+}

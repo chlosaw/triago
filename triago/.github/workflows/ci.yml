@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: triago
+          POSTGRES_PASSWORD: triago
+          POSTGRES_DB: triago_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U triago"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://triago:triago@localhost:5432/triago_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      # Fail on known high/critical vulnerabilities in what ships to production.
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  docker:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    # Compose refuses to read the file without JWT_SECRET, even just to build.
+    # The images never contain it; this placeholder only satisfies that check.
+    env:
+      JWT_SECRET: ci-build-only-placeholder-not-a-real-secret
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build

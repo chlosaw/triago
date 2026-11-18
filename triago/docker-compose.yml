@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: triago
+      POSTGRES_PASSWORD: triago
+      POSTGRES_DB: triago
+    ports:
+      # Localhost only: the database should never be reachable from the network.
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U triago']
+      interval: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgres://triago:triago@db:5432/triago
+      # Required: compose stops with this message if .env does not set it.
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (copy .env.example)}
+      CLIENT_ORIGIN: http://localhost:8080
+      NODE_ENV: production
+      # nginx in the web container is the one proxy in front of the API.
+      TRUST_PROXY: 1
+      # Optional: AI drafts (free Groq key) and real inbound email (see docs/inbound-email.md).
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      INBOUND_EMAIL_DOMAIN: ${INBOUND_EMAIL_DOMAIN:-}
+      INBOUND_WEBHOOK_SECRET: ${INBOUND_WEBHOOK_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Localhost only (for curl and debugging); browsers go through nginx on :8080.
+      - '127.0.0.1:3001:3001'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - '8080:80'
+
+volumes:
+  pgdata:

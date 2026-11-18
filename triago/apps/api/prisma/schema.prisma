@@ -1,0 +1,205 @@
+// Triago data model. Tables and columns keep snake_case names in Postgres.
+//
+// Tenant isolation: every tenant-owned row carries org_id. Messages and events
+// reference their ticket through (org_id, ticket_id), so the database rejects
+// a child row that points at another organisation's ticket.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MemberRole {
+  admin
+  agent
+
+  @@map("member_role")
+}
+
+enum TicketStatus {
+  new
+  open
+  waiting
+  resolved
+  closed
+  dismissed
+
+  @@map("ticket_status")
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+  urgent
+
+  @@map("ticket_priority")
+}
+
+enum TicketCategory {
+  bug
+  request
+  question
+  billing
+
+  @@map("ticket_category")
+}
+
+enum TicketSource {
+  email
+  manual
+
+  @@map("ticket_source")
+}
+
+enum MessageKind {
+  inbound
+  outbound
+  note
+
+  @@map("message_kind")
+}
+
+model Organisation {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  ticketPrefix     String   @default("TRI") @map("ticket_prefix")
+  nextTicketNumber Int      @default(1) @map("next_ticket_number")
+  settings         Json     @default("{}")
+  isDemo           Boolean  @default(false) @map("is_demo")
+  /// Local part of the organisation's inbound address (<slug>@INBOUND_EMAIL_DOMAIN). Random, so addresses can't be guessed from names.
+  inboundSlug      String   @unique @default(dbgenerated("substr(md5((gen_random_uuid())::text), 1, 10)")) @map("inbound_slug")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  memberships   Membership[]
+  tickets       Ticket[]
+  refreshTokens RefreshToken[]
+
+  @@map("organisations")
+}
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String   @unique @db.Citext
+  /// Null for demo visitors, who sign in through /api/auth/demo only.
+  passwordHash String?  @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  memberships     Membership[]
+  refreshTokens   RefreshToken[]
+  assignedTickets Ticket[]       @relation("assignee")
+  messages        Message[]
+  events          TicketEvent[]
+
+  @@map("users")
+}
+
+model Membership {
+  orgId     String     @map("org_id") @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  role      MemberRole @default(agent)
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  orgId     String    @map("org_id") @db.Uuid
+  /// Every token issued from one sign-in shares a family; reuse of a rotated
+  /// token revokes the whole family.
+  familyId  String    @map("family_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model Ticket {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId          String         @map("org_id") @db.Uuid
+  number         Int
+  title          String
+  summary        String         @default("")
+  category       TicketCategory @default(question)
+  priority       TicketPriority @default(medium)
+  status         TicketStatus   @default(new)
+  source         TicketSource
+  requesterName  String         @default("") @map("requester_name")
+  requesterEmail String?        @map("requester_email") @db.Citext
+  /// Membership in the same organisation is checked by the service.
+  assigneeId     String?        @map("assignee_id") @db.Uuid
+  aiConfidence   Float?         @map("ai_confidence")
+  /// Provider message id, so a mailbox sync never imports the same email twice.
+  externalId     String?        @map("external_id")
+  receivedAt     DateTime       @default(now()) @map("received_at") @db.Timestamptz
+  triagedAt      DateTime?      @map("triaged_at") @db.Timestamptz
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  org      Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignee User?         @relation("assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  messages Message[]
+  events   TicketEvent[]
+
+  @@unique([orgId, id])
+  @@unique([orgId, number])
+  @@unique([orgId, externalId])
+  @@index([orgId, status, receivedAt(sort: Desc)])
+  @@map("tickets")
+}
+
+model Message {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String      @map("org_id") @db.Uuid
+  ticketId  String      @map("ticket_id") @db.Uuid
+  kind      MessageKind
+  authorId  String?     @map("author_id") @db.Uuid
+  fromName  String      @default("") @map("from_name")
+  fromEmail String?     @map("from_email") @db.Citext
+  body      String
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  /// Set when an internal note is edited; emails are never edited.
+  editedAt  DateTime?   @map("edited_at") @db.Timestamptz
+
+  ticket Ticket @relation(fields: [orgId, ticketId], references: [orgId, id], onDelete: Cascade)
+  author User?  @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@map("messages")
+}
+
+model TicketEvent {
+  id        BigInt   @id @default(autoincrement())
+  orgId     String   @map("org_id") @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  type      String
+  data      Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  ticket Ticket @relation(fields: [orgId, ticketId], references: [orgId, id], onDelete: Cascade)
+  actor  User?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_events")
+}
