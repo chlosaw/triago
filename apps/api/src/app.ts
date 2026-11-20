@@ -12,9 +12,11 @@ import { requireAuth } from './middleware/auth.js';
 import { limiter, noStore } from './middleware/security.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { emailsRouter } from './modules/emails/emails.routes.js';
+import { gmailRouter } from './modules/gmail/gmail.routes.js';
 import { inboundRouter } from './modules/inbound/inbound.routes.js';
 import { orgRouter } from './modules/org/org.routes.js';
 import { statsRouter } from './modules/stats/stats.routes.js';
+import { textRouter } from './modules/text/text.routes.js';
 import { ticketsRouter } from './modules/tickets/tickets.routes.js';
 
 export function createApp() {
@@ -69,6 +71,9 @@ export function createApp() {
   app.use('/api/emails', requireAuth, emailsRouter);
   app.use('/api/org', requireAuth, orgRouter);
   app.use('/api/stats', requireAuth, statsRouter);
+  app.use('/api/text', requireAuth, textRouter);
+  // The OAuth callback is public (Google redirects the browser); the other routes check auth themselves.
+  app.use('/api/gmail', gmailRouter);
 
   app.use('/api', () => {
     throw notFound('Endpoint');

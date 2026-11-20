@@ -1,6 +1,6 @@
 import {
-  WORKFLOW_STATUSES,
   type AcceptTicketBody,
+  type CreateTicketBody,
   type Category,
   type Message,
   type PatchTicketBody,
@@ -10,6 +10,7 @@ import {
   type Status,
   type Ticket,
   type TicketEvent,
+  type TicketLink,
   type TicketPage
 } from '@triago/shared';
 import type { Prisma } from '../../generated/prisma/client.js';
@@ -39,6 +40,7 @@ function toTicket(row: TicketRow): Ticket {
     source: row.source,
     requester: { name: row.requesterName, email: row.requesterEmail },
     assignee: row.assignee,
+    links: Array.isArray(row.links) ? (row.links as unknown as TicketLink[]) : [],
     aiConfidence: row.aiConfidence,
     receivedAt: row.receivedAt.toISOString(),
     triagedAt: row.triagedAt?.toISOString() ?? null,
@@ -57,10 +59,15 @@ const ORDER_BY: Record<Sort, Prisma.TicketOrderByWithRelationInput[]> = {
  */
 export async function listTickets(
   orgId: string,
-  options: { statuses: Status[]; sort: Sort; limit: number; cursor?: string; q?: string }
+  options: { statuses: Status[]; sort: Sort; limit: number; cursor?: string; q?: string; assigneeId?: string }
 ): Promise<TicketPage> {
   const rows = await prisma.ticket.findMany({
-    where: { orgId, status: { in: options.statuses }, ...(options.q ? searchFilter(options.q) : {}) },
+    where: {
+      orgId,
+      status: { in: options.statuses },
+      ...(options.assigneeId ? { assigneeId: options.assigneeId } : {}),
+      ...(options.q ? searchFilter(options.q) : {})
+    },
     orderBy: ORDER_BY[options.sort],
     take: options.limit + 1,
     ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
@@ -116,6 +123,8 @@ export interface NewTicket {
   category?: Category;
   priority?: Priority;
   status?: Status;
+  assigneeId?: string | null;
+  links?: TicketLink[];
   source: Source;
   requesterName?: string;
   requesterEmail?: string | null;
@@ -168,21 +177,31 @@ export async function insertTicket(tx: Tx, orgId: string, input: NewTicket, acto
   return ticket.id;
 }
 
-/** Manual tickets skip the triage queue. */
-export async function createManualTicket(
-  orgId: string,
-  input: Pick<NewTicket, 'title' | 'summary' | 'category' | 'priority'>,
-  actorId: string
-): Promise<Ticket> {
+/**
+ * A ticket an agent writes by hand. Without a status it starts In progress
+ * (`open`); a `new` ticket waits in the New column like an email draft.
+ */
+export async function createManualTicket(orgId: string, input: CreateTicketBody, actorId: string): Promise<Ticket> {
   return prisma.$transaction(async (tx) => {
+    if (input.assigneeId) await assertMember(tx, orgId, input.assigneeId);
+    const status = input.status ?? 'open';
     const id = await insertTicket(
       tx,
       orgId,
-      { ...input, source: 'manual', status: 'open', triagedAt: new Date() },
+      { ...input, source: 'manual', status, triagedAt: status === 'new' ? null : new Date() },
       actorId
     );
     return getTicket(orgId, id, tx);
   });
+}
+
+async function assertMember(tx: Tx, orgId: string, userId: string): Promise<void> {
+  const member = await tx.membership.findUnique({ where: { orgId_userId: { orgId, userId } } });
+  if (!member) {
+    throw new HttpError(400, 'VALIDATION_FAILED', 'Assignee is not in this organisation.', {
+      assigneeId: 'Not a member'
+    });
+  }
 }
 
 /** Applies a partial update and records one `field_changed` event per field that actually changed. */
@@ -194,27 +213,23 @@ export async function updateTicket(
 ): Promise<Ticket> {
   return prisma.$transaction(async (tx) => {
     const current = await lockTicket(tx, orgId, id);
+    if (patch.assigneeId) await assertMember(tx, orgId, patch.assigneeId);
 
-    if (patch.status && !isWorkflowStatus(patch.status)) {
-      throw new HttpError(400, 'INVALID_STATUS', `Use the triage actions to move a ticket to "${patch.status}".`);
-    }
-    if (patch.status && !isWorkflowStatus(current.status)) {
-      throw new HttpError(409, 'NOT_TRIAGED', 'Accept the ticket from the queue before changing its status.');
-    }
-    if (patch.assigneeId) {
-      const member = await tx.membership.findUnique({
-        where: { orgId_userId: { orgId, userId: patch.assigneeId } }
-      });
-      if (!member) {
-        throw new HttpError(400, 'VALIDATION_FAILED', 'Assignee is not in this organisation.', {
-          assigneeId: 'Not a member'
-        });
-      }
-    }
-
-    const changes = await applyChanges(tx, current, patch);
+    const { links, ...fields } = patch;
+    const changes = await applyChanges(tx, current, fields);
     for (const [field, change] of Object.entries(changes)) {
       await logEvent(tx, orgId, id, actorId, 'field_changed', { field, ...change });
+    }
+
+    // Leaving New counts as triage; going back to New puts the ticket in the queue again.
+    if (changes.status) {
+      const triagedAt = changes.status.to === 'new' ? null : current.status === 'new' ? new Date() : undefined;
+      if (triagedAt !== undefined) await tx.ticket.update({ where: { id }, data: { triagedAt } });
+    }
+
+    if (links && JSON.stringify(links) !== JSON.stringify(current.links)) {
+      await tx.ticket.update({ where: { id }, data: { links } });
+      await logEvent(tx, orgId, id, actorId, 'links_changed', { count: links.length });
     }
     return getTicket(orgId, id, tx);
   });
@@ -271,10 +286,8 @@ export async function deleteTicket(orgId: string, id: string): Promise<void> {
   if (!count) throw notFound('Ticket');
 }
 
-const isWorkflowStatus = (status: Status) => (WORKFLOW_STATUSES as readonly Status[]).includes(status);
-
 const EDITABLE = ['title', 'summary', 'category', 'priority', 'status', 'assigneeId'] as const;
-type Editable = Pick<Prisma.TicketGetPayload<object>, 'id' | (typeof EDITABLE)[number]>;
+type Editable = Pick<Prisma.TicketGetPayload<object>, 'id' | 'links' | (typeof EDITABLE)[number]>;
 
 /** Row-locks the ticket for the rest of the transaction and returns its editable fields. */
 async function lockTicket(tx: Tx, orgId: string, id: string): Promise<Editable> {
@@ -283,14 +296,27 @@ async function lockTicket(tx: Tx, orgId: string, id: string): Promise<Editable> 
   if (!locked.length) throw notFound('Ticket');
   return tx.ticket.findUniqueOrThrow({
     where: { id },
-    select: { id: true, title: true, summary: true, category: true, priority: true, status: true, assigneeId: true }
+    select: {
+      id: true,
+      title: true,
+      summary: true,
+      category: true,
+      priority: true,
+      status: true,
+      assigneeId: true,
+      links: true
+    }
   });
 }
 
 type Change = { from: string | null; to: string | null };
 
 /** Writes the fields of `patch` that differ from `current` and returns them as { field: { from, to } }. */
-async function applyChanges(tx: Tx, current: Editable, patch: PatchTicketBody): Promise<Record<string, Change>> {
+async function applyChanges(
+  tx: Tx,
+  current: Editable,
+  patch: Omit<PatchTicketBody, 'links'>
+): Promise<Record<string, Change>> {
   const changes: Record<string, Change> = {};
   const data: Prisma.TicketUncheckedUpdateInput = {};
 

@@ -2,14 +2,30 @@ import type { Ticket } from '@triago/shared';
 import { Prisma } from '../../generated/prisma/client.js';
 import { prisma } from '../../lib/db.js';
 import { HttpError } from '../../lib/errors.js';
+import { isConnected, syncGmail } from '../gmail/gmail.service.js';
 import { getTicket, insertTicket } from '../tickets/tickets.service.js';
 import { draftTicket } from './llm-classifier.js';
 import { SAMPLE_MAILBOX } from './sampleMailbox.js';
 
-/**
- * Imports the next email this organisation has not seen into the triage
- * queue, with an AI draft. Reads from the sample mailbox until Gmail lands.
- */
+export interface SyncResult {
+  /** The first ticket imported, so the queue can open it. */
+  imported: Ticket | null;
+  importedCount: number;
+  remaining: number;
+  source: 'gmail' | 'sample';
+}
+
+/** Pulls new mail: from the connected Gmail mailbox, or the sample mailbox when none is connected. */
+export async function syncInbox(orgId: string): Promise<SyncResult> {
+  if (await isConnected(orgId)) {
+    const { imported, remaining } = await syncGmail(orgId);
+    return { imported: imported[0] ?? null, importedCount: imported.length, remaining, source: 'gmail' };
+  }
+  const { imported, remaining } = await importNextEmail(orgId);
+  return { imported, importedCount: imported ? 1 : 0, remaining, source: 'sample' };
+}
+
+/** Imports the next email this organisation has not seen from the sample mailbox, with an AI draft. */
 export async function importNextEmail(orgId: string): Promise<{ imported: Ticket | null; remaining: number }> {
   const seen = await prisma.ticket.findMany({
     where: { orgId, externalId: { in: SAMPLE_MAILBOX.map((email) => email.id) } },

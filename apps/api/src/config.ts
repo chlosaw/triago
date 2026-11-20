@@ -39,6 +39,11 @@ const Env = z.object({
       .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/, 'INBOUND_EMAIL_DOMAIN must be a domain like in.example.com')
   ),
   INBOUND_WEBHOOK_SECRET: optional(z.string().min(32, 'INBOUND_WEBHOOK_SECRET must be at least 32 characters')),
+  // Optional: a Google OAuth client (type "Web application") lets each organisation connect a Gmail
+  // mailbox. See docs/gmail.md. The redirect URI defaults to <CLIENT_ORIGIN>/api/gmail/callback.
+  GOOGLE_CLIENT_ID: optional(z.string().min(1)),
+  GOOGLE_CLIENT_SECRET: optional(z.string().min(1)),
+  GOOGLE_REDIRECT_URI: optional(z.url()),
   // Set to "false" to run an API instance that does not process background jobs.
   JOBS_ENABLED: z.enum(['true', 'false']).default('true')
 });
@@ -62,6 +67,14 @@ export const config = {
   classifierModel: env.CLASSIFIER_MODEL,
   inboundEmailDomain: env.INBOUND_EMAIL_DOMAIN,
   inboundWebhookSecret: env.INBOUND_WEBHOOK_SECRET,
+  google:
+    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+      ? {
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          redirectUri: env.GOOGLE_REDIRECT_URI ?? `${new URL(env.CLIENT_ORIGIN).origin}/api/gmail/callback`
+        }
+      : null,
   jobsEnabled: env.JOBS_ENABLED === 'true' && env.NODE_ENV !== 'test',
   accessTokenTtlSeconds: 15 * 60,
   jwtIssuer: 'triago-api',

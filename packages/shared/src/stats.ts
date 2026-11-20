@@ -9,7 +9,7 @@ export interface Stats {
   filed: number;
   filedFromEmail: number;
   medianTriageMinutes: number | null;
-  /** Every status except `dismissed`. */
+  /** Ticket count per stored status. */
   byStatus: Partial<Record<Status, number>>;
   last7Days: { day: string; received: number; filed: number }[];
   /** Tickets created over the requested range, bucketed by hour (day) or day (week, month). */

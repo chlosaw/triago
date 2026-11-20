@@ -34,7 +34,7 @@ export async function getStats(orgId: string, timeZone: string, range: StatsRang
 
     prisma.ticket.groupBy({
       by: ['status'],
-      where: { orgId, status: { not: 'dismissed' } },
+      where: { orgId },
       _count: { _all: true }
     }),
 

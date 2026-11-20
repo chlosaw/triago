@@ -5,6 +5,7 @@ import { ErrorState } from '../../components/QueryState';
 import { Segmented } from '../../components/Segmented';
 import { Toggle } from '../../components/Toggle';
 import { useProfile } from '../auth/context';
+import { GmailCard } from './GmailCard';
 
 export function SettingsView({ org, members }: { org: Organisation; members: Member[] }) {
   const { user, role } = useProfile();
@@ -21,18 +22,14 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
             <span className="section-kicker">Settings</span>
             <h2>Mail intake</h2>
           </div>
-          <span className="connection-chip">Gmail not connected</span>
+          <span className={`connection-chip ${org.gmail.email ? 'is-on' : ''}`}>
+            {org.gmail.email ? 'Gmail connected' : 'Gmail not connected'}
+          </span>
         </div>
 
         <Card className="account-card">
           <div className="account-card-inner">
-            <div className="sync-row">
-              <div className="sync-dot" />
-              <div>
-                <strong>Gmail sync is on the roadmap</strong>
-                <span>Until then, “Pull new mail” in the queue imports from a sample mailbox.</span>
-              </div>
-            </div>
+            <GmailCard org={org} readOnly={readOnly} />
 
             {readOnly && <div className="alert-box">Only admins can change these settings.</div>}
             {update.error && <ErrorState message={update.error.message} />}
@@ -50,7 +47,19 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
                   { value: 'bugs', label: 'Bugs' }
                 ]}
               />
+              <span className="helper-line">
+                Which Gmail label to import from. For Support or Bugs, create that label in Gmail (or a filter that
+                applies it) first.
+              </span>
             </div>
+
+            <Toggle
+              label="Skip newsletters and notifications"
+              note="Ignore Gmail's Promotions, Social, Updates and Forums tabs."
+              checked={settings.skipBulkMail}
+              disabled={readOnly}
+              onChange={(skipBulkMail) => save({ skipBulkMail })}
+            />
 
             {/* Shown so the direction is visible, but disabled: nothing reads these yet. */}
             <fieldset className="planned" disabled>
@@ -88,15 +97,8 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
               </div>
               <div className="toggle-list">
                 <Toggle
-                  label="Skip newsletters and receipts"
-                  note="Bulk mail never reaches the queue."
-                  checked={settings.skipBulkMail}
-                  disabled
-                  onChange={() => {}}
-                />
-                <Toggle
                   label="Daily queue digest"
-                  note="One email at 9:00 with pending drafts."
+                  note="One email at 9:00 with new drafts."
                   checked={settings.dailyDigest}
                   disabled
                   onChange={() => {}}

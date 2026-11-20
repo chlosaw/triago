@@ -35,11 +35,14 @@ Open http://localhost:8080 and click **Try the demo, no sign-up**.
 
 - AI turns incoming emails into draft tickets
 - Keyword rules draft tickets when the AI is unavailable
-- Triage queue with accept, dismiss and undo
+- Connect a Gmail mailbox; new mail becomes draft tickets (see [docs/gmail.md](docs/gmail.md))
+- Four statuses: New, In progress, On hold, Closed
+- Create-ticket dialog with description, assignee, urgency, attachments and links
+- Spelling and grammar fixes for ticket text (AI when configured, built-in rules otherwise)
 - Search by title, summary and requester
 - Activity log and internal notes
 - Organisations with admin and agent roles
-- Dashboard with a 7-day chart
+- Dashboard with your tickets and team statistics
 - Demo sandbox, no sign-up needed
 
 ## Available Scripts
@@ -53,3 +56,4 @@ Open http://localhost:8080 and click **Try the demo, no sign-up**.
 
 - Get a free AI key at [console.groq.com/keys](https://console.groq.com/keys) and set `GROQ_API_KEY` in `.env`.
 - Without a key, the app still works and keyword rules draft the tickets.
+- To import real mail, create a Google OAuth client and set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (see [docs/gmail.md](docs/gmail.md)).

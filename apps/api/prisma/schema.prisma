@@ -80,6 +80,7 @@ model Organisation {
   memberships   Membership[]
   tickets       Ticket[]
   refreshTokens RefreshToken[]
+  gmail         GmailConnection?
 
   @@map("organisations")
 }
@@ -92,11 +93,13 @@ model User {
   name         String
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  memberships     Membership[]
-  refreshTokens   RefreshToken[]
-  assignedTickets Ticket[]       @relation("assignee")
-  messages        Message[]
-  events          TicketEvent[]
+  memberships      Membership[]
+  refreshTokens    RefreshToken[]
+  assignedTickets  Ticket[]          @relation("assignee")
+  messages         Message[]
+  events           TicketEvent[]
+  attachments      Attachment[]
+  gmailConnections GmailConnection[]
 
   @@map("users")
 }
@@ -153,13 +156,16 @@ model Ticket {
   externalId     String?        @map("external_id")
   receivedAt     DateTime       @default(now()) @map("received_at") @db.Timestamptz
   triagedAt      DateTime?      @map("triaged_at") @db.Timestamptz
+  /// Related links as [{ url, title }].
+  links          Json           @default("[]")
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  org      Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  assignee User?         @relation("assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  messages Message[]
-  events   TicketEvent[]
+  org         Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assignee    User?         @relation("assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  messages    Message[]
+  events      TicketEvent[]
+  attachments Attachment[]
 
   @@unique([orgId, id])
   @@unique([orgId, number])
@@ -202,4 +208,38 @@ model TicketEvent {
 
   @@index([ticketId, createdAt])
   @@map("ticket_events")
+}
+
+/// A file attached to a ticket. Stored in Postgres; uploads are capped at 5 MB.
+model Attachment {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  ticketId    String   @map("ticket_id") @db.Uuid
+  uploaderId  String?  @map("uploader_id") @db.Uuid
+  filename    String
+  contentType String   @map("content_type")
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  ticket   Ticket @relation(fields: [orgId, ticketId], references: [orgId, id], onDelete: Cascade)
+  uploader User?  @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@map("attachments")
+}
+
+/// The Gmail mailbox an organisation imports from. The refresh token is encrypted (AES-256-GCM).
+model GmailConnection {
+  orgId         String    @id @map("org_id") @db.Uuid
+  email         String    @db.Citext
+  refreshToken  String    @map("refresh_token")
+  connectedById String?   @map("connected_by_id") @db.Uuid
+  lastSyncedAt  DateTime? @map("last_synced_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  org         Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  connectedBy User?        @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+
+  @@map("gmail_connections")
 }

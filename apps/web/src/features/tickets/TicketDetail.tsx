@@ -1,13 +1,17 @@
-import type { Status, Ticket } from '@triago/shared';
+import type { Priority, Ticket } from '@triago/shared';
 import { useState } from 'react';
 import { useTicket, useTicketActions, type TicketEdits } from '../../api/queries';
 import { Corners } from '../../components/Card';
 import { ErrorState } from '../../components/QueryState';
 import { Segmented } from '../../components/Segmented';
-import { CATEGORY_OPTIONS, PRIORITY_OPTIONS, STATUS_OPTIONS, percent } from '../../lib/labels';
+import { CATEGORY_OPTIONS, PRIORITY_OPTIONS, percent, statusLabel } from '../../lib/labels';
 import { ActivityTimeline } from './ActivityTimeline';
 import { AssigneeSelect } from './AssigneeSelect';
+import { AttachmentsPanel } from './AttachmentsPanel';
+import { GrammarButton } from './GrammarButton';
+import { LinksEditor } from './LinksEditor';
 import { NotesPanel } from './NotesPanel';
+import { StatusSelect } from './StatusSelect';
 
 export function TicketDetail({ ticket }: { ticket: Ticket }) {
   const detail = useTicket(ticket.id);
@@ -19,11 +23,15 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
       <span className="detail-kicker">{ticket.source === 'email' ? 'Source email' : 'Manual ticket'}</span>
       <h3>{ticket.title}</h3>
       <div className="source-grid">
-        <span>From</span>
-        <span>
-          {ticket.requester.name}
-          {ticket.requester.email && ` <${ticket.requester.email}>`}
-        </span>
+        {(ticket.requester.name || ticket.requester.email) && (
+          <>
+            <span>From</span>
+            <span>
+              {ticket.requester.name}
+              {ticket.requester.email && ` <${ticket.requester.email}>`}
+            </span>
+          </>
+        )}
         <span>Received</span>
         <span>{new Date(ticket.receivedAt).toLocaleString()}</span>
       </div>
@@ -35,8 +43,15 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
       {detail.isError && <ErrorState message={detail.error.message} onRetry={() => detail.refetch()} />}
       {sourceEmail && <div className="email-body">{sourceEmail.body}</div>}
 
-      {ticket.status === 'new' ? <DraftEditor ticket={ticket} /> : <TriageOutcome ticket={ticket} />}
+      {/* An email the AI drafted waits for review; everything else is worked like any ticket. */}
+      {ticket.status === 'new' && ticket.source === 'email' ? (
+        <DraftEditor ticket={ticket} />
+      ) : (
+        <TicketControls ticket={ticket} />
+      )}
 
+      <LinksPanel ticket={ticket} />
+      {detail.data && <AttachmentsPanel ticketId={ticket.id} attachments={detail.data.attachments} />}
       {detail.data && <NotesPanel ticketId={ticket.id} notes={notes} />}
       <ActivityTimeline ticketId={ticket.id} />
     </section>
@@ -68,14 +83,19 @@ function DraftEditor({ ticket }: { ticket: Ticket }) {
         </div>
       </div>
 
-      <label className="draft-field">
-        <span className="mini-label">Summary</span>
+      <div className="draft-field">
+        <label className="mini-label" htmlFor={`summary-${ticket.id}`}>
+          Summary
+        </label>
         <textarea
+          id={`summary-${ticket.id}`}
           className="input textarea-input"
           value={draft.summary}
+          spellCheck
           onChange={(event) => set({ summary: event.target.value })}
         />
-      </label>
+        <GrammarButton value={draft.summary} onChange={(summary) => set({ summary })} />
+      </div>
 
       <div className="draft-field">
         <span className="mini-label">Category</span>
@@ -88,9 +108,9 @@ function DraftEditor({ ticket }: { ticket: Ticket }) {
       </div>
 
       <div className="draft-field">
-        <span className="mini-label">Priority</span>
+        <span className="mini-label">Urgency</span>
         <Segmented
-          label="Priority"
+          label="Urgency"
           options={PRIORITY_OPTIONS}
           value={draft.priority}
           onChange={(priority) => set({ priority })}
@@ -107,67 +127,76 @@ function DraftEditor({ ticket }: { ticket: Ticket }) {
           onClick={() => accept.mutate({ id: ticket.id, edits: { ...draft, title: draft.title.trim() } })}
         >
           <Corners />
-          Accept as {ticket.key}
+          Accept · start progress
         </button>
         <button
           type="button"
           className="btn btn-ghost"
           disabled={dismiss.isPending}
+          title="Close without working on it, e.g. spam or a duplicate"
           onClick={() => dismiss.mutate(ticket.id)}
         >
-          Dismiss
+          Close
         </button>
       </div>
     </div>
   );
 }
 
-function TriageOutcome({ ticket }: { ticket: Ticket }) {
-  const { returnToQueue, update } = useTicketActions();
-  const dismissed = ticket.status === 'dismissed';
-  const canUndo = dismissed || ticket.status === 'open';
+/** Status, assignee and urgency for a ticket being worked, plus its description. */
+function TicketControls({ ticket }: { ticket: Ticket }) {
+  const { update } = useTicketActions();
 
   return (
     <div className="done-box">
-      <span className="done-kicker">{dismissed ? 'Dismissed' : `Accepted · ${ticket.key}`}</span>
-      <span className="done-title">{ticket.title}</span>
-      {dismissed ? (
-        <span className="done-note">No ticket was filed. The email stays in the mailbox untouched.</span>
-      ) : (
-        <div className="ticket-controls">
-          <label className="draft-field">
-            <span className="mini-label">Status</span>
-            <select
-              className="status-select"
-              value={ticket.status}
-              disabled={update.isPending}
-              onChange={(event) => update.mutate({ id: ticket.id, patch: { status: event.target.value as Status } })}
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="draft-field">
-            <span className="mini-label">Assignee</span>
-            <AssigneeSelect ticket={ticket} />
-          </div>
+      <span className="done-kicker">
+        {ticket.key} · {statusLabel(ticket.status)}
+        {ticket.status === 'dismissed' && ' (dismissed draft)'}
+      </span>
+      {ticket.summary && <p className="ticket-description">{ticket.summary}</p>}
+      <div className="ticket-controls">
+        <label className="draft-field">
+          <span className="mini-label">Status</span>
+          <StatusSelect ticket={ticket} />
+        </label>
+        <div className="draft-field">
+          <span className="mini-label">Assignee</span>
+          <AssigneeSelect ticket={ticket} />
         </div>
-      )}
+        <label className="draft-field">
+          <span className="mini-label">Urgency</span>
+          <select
+            className="status-select"
+            value={ticket.priority}
+            disabled={update.isPending}
+            onChange={(event) => update.mutate({ id: ticket.id, patch: { priority: event.target.value as Priority } })}
+          >
+            {PRIORITY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {update.error && <ErrorState message={update.error.message} />}
-      {returnToQueue.error && <ErrorState message={returnToQueue.error.message} />}
-      {canUndo && (
-        <button
-          type="button"
-          className="btn btn-ghost"
-          disabled={returnToQueue.isPending}
-          onClick={() => returnToQueue.mutate(ticket.id)}
-        >
-          Move back to pending
-        </button>
-      )}
     </div>
+  );
+}
+
+function LinksPanel({ ticket }: { ticket: Ticket }) {
+  const { update } = useTicketActions();
+  return (
+    <section className="detail-section" aria-labelledby={`links-${ticket.id}`}>
+      <div className="detail-section-head">
+        <h4 id={`links-${ticket.id}`}>Links</h4>
+      </div>
+      <LinksEditor
+        links={ticket.links}
+        disabled={update.isPending}
+        onChange={(links) => update.mutate({ id: ticket.id, patch: { links } })}
+      />
+      {update.error && <ErrorState message={update.error.message} />}
+    </section>
   );
 }

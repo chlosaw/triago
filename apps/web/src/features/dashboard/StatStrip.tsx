@@ -5,11 +5,11 @@ import { percent } from '../../lib/labels';
 export function StatStrip({ stats }: { stats: Stats }) {
   const items = [
     {
-      label: 'Awaiting triage',
+      label: 'New',
       value: stats.awaitingTriage,
-      note: stats.awaitingTriage ? 'in the queue' : 'queue is clear'
+      note: stats.awaitingTriage ? 'waiting to be picked up' : 'nothing new'
     },
-    { label: 'Active tickets', value: stats.active, note: 'open or waiting on customer' },
+    { label: 'Active tickets', value: stats.active, note: 'in progress or on hold' },
     {
       label: 'Filed from email',
       value: stats.filedFromEmail,
@@ -18,7 +18,7 @@ export function StatStrip({ stats }: { stats: Stats }) {
     {
       label: 'Time to triage',
       value: stats.medianTriageMinutes === null ? '—' : `${stats.medianTriageMinutes}m`,
-      note: 'median, email → decision'
+      note: 'median, email → first status change'
     }
   ];
 

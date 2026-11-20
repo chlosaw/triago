@@ -1,7 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render as renderBare, screen } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { NoteForm } from './NotesPanel';
+
+// The form's grammar button uses a query mutation, so it needs a client.
+const render = (ui: ReactElement) =>
+  renderBare(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
 describe('NoteForm', () => {
   it('blocks an empty note with the schema message and does not submit', async () => {

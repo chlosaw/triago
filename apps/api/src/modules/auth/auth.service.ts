@@ -152,10 +152,15 @@ export async function logout(refreshToken: string): Promise<void> {
 
 /** Signs a visitor into a fresh sandbox organisation; no account needed. */
 export async function startDemo(): Promise<Session> {
-  return prisma.$transaction(async (tx) => {
-    const { userId, orgId } = await createSandbox(tx);
-    return issueSession(tx, { userId, orgId, role: 'admin' });
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      const { userId, orgId } = await createSandbox(tx);
+      return issueSession(tx, { userId, orgId, role: 'admin' });
+      // Seeding runs ~150 queries; against a remote database (e.g. Neon, ~50 ms a round trip)
+      // that takes longer than Prisma's 5 s default.
+    },
+    { timeout: 30_000, maxWait: 10_000 }
+  );
 }
 
 export async function getProfile(auth: AuthContext): Promise<Profile> {

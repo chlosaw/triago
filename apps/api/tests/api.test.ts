@@ -159,17 +159,117 @@ describe('triage', () => {
     expect(dismissed.body.ticket.status).toBe('dismissed');
   });
 
-  it('logs status changes and blocks them before triage', async () => {
+  it('moves tickets between the four statuses and logs each change', async () => {
     const { token } = await signUp();
     const { body } = await request(app).post('/api/tickets').set(auth(token)).send({ title: 'Manual' });
     const id = body.ticket.id;
+    expect(body.ticket.status).toBe('open');
 
     await request(app).patch(`/api/tickets/${id}`).set(auth(token)).send({ status: 'waiting' }).expect(200);
-    await request(app).patch(`/api/tickets/${id}`).set(auth(token)).send({ status: 'new' }).expect(400);
+    const backToNew = await request(app).patch(`/api/tickets/${id}`).set(auth(token)).send({ status: 'new' });
+    expect(backToNew.status).toBe(200);
+    expect(backToNew.body.ticket).toMatchObject({ status: 'new', triagedAt: null });
+    // Dismissing only happens through triage.
+    await request(app).patch(`/api/tickets/${id}`).set(auth(token)).send({ status: 'dismissed' }).expect(400);
 
     const events = await request(app).get(`/api/tickets/${id}/events`).set(auth(token));
-    expect(events.body.events.map((event: { type: string }) => event.type)).toEqual(['created', 'field_changed']);
+    expect(events.body.events.map((event: { type: string }) => event.type)).toEqual([
+      'created',
+      'field_changed',
+      'field_changed'
+    ]);
     expect(events.body.events[1].data).toEqual({ field: 'status', from: 'open', to: 'waiting' });
+  });
+
+  it('creates a ticket with every field from the new-ticket dialog', async () => {
+    const { token } = await signUp();
+    const me = await request(app).get('/api/auth/me').set(auth(token));
+    const { body } = await request(app)
+      .post('/api/tickets')
+      .set(auth(token))
+      .send({
+        title: 'Export fails',
+        summary: 'CSV export times out.',
+        priority: 'urgent',
+        status: 'new',
+        assigneeId: me.body.user.id,
+        links: [{ url: 'https://example.com/logs', title: 'Logs' }]
+      })
+      .expect(201);
+    expect(body.ticket).toMatchObject({
+      status: 'new',
+      priority: 'urgent',
+      triagedAt: null,
+      assignee: { id: me.body.user.id },
+      links: [{ url: 'https://example.com/logs', title: 'Logs' }]
+    });
+
+    await request(app)
+      .post('/api/tickets')
+      .set(auth(token))
+      .send({ title: 'Bad link', links: [{ url: 'javascript:alert(1)' }] })
+      .expect(400);
+
+    const mine = await request(app).get('/api/tickets?assignee=me').set(auth(token)).expect(200);
+    expect(mine.body.tickets.map((ticket: { id: string }) => ticket.id)).toEqual([body.ticket.id]);
+  });
+
+  it('stores, downloads and deletes attachments', async () => {
+    const { token } = await signUp();
+    const { body } = await request(app).post('/api/tickets').set(auth(token)).send({ title: 'With file' });
+    const id = body.ticket.id;
+
+    const upload = await request(app)
+      .post(`/api/tickets/${id}/attachments`)
+      .set(auth(token))
+      .set('Content-Type', 'application/octet-stream')
+      .set('X-Filename', encodeURIComponent('../screen shot.png'))
+      .set('X-Content-Type', 'image/png')
+      .send(Buffer.from('fake image bytes'))
+      .expect(201);
+    expect(upload.body.attachment).toMatchObject({ filename: 'screen shot.png', contentType: 'image/png', size: 16 });
+
+    const detail = await request(app).get(`/api/tickets/${id}`).set(auth(token)).expect(200);
+    expect(detail.body.attachments).toHaveLength(1);
+
+    const file = await request(app)
+      .get(`/api/tickets/${id}/attachments/${upload.body.attachment.id}`)
+      .set(auth(token))
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(file.headers['content-disposition']).toContain('attachment');
+    expect((file.body as Buffer).toString()).toBe('fake image bytes');
+
+    // Another organisation can't see it.
+    const other = await signUp('Other');
+    await request(app)
+      .get(`/api/tickets/${id}/attachments/${upload.body.attachment.id}`)
+      .set(auth(other.token))
+      .expect(404);
+
+    await request(app)
+      .delete(`/api/tickets/${id}/attachments/${upload.body.attachment.id}`)
+      .set(auth(token))
+      .expect(204);
+  });
+
+  it('corrects spelling and punctuation without touching links', async () => {
+    const { token } = await signUp();
+    const { body } = await request(app)
+      .post('/api/text/correct')
+      .set(auth(token))
+      .send({ text: 'i dont recieve teh invoice ,see https://x.io/a?b=1,c' })
+      .expect(200);
+    expect(body).toEqual({
+      text: "I don't receive the invoice, see https://x.io/a?b=1,c",
+      changed: true,
+      engine: 'rules'
+    });
   });
 
   it('imports each sample email once', async () => {

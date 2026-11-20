@@ -2,6 +2,7 @@ import { OrgSettings, type Member, type Organisation, type OrgSettingsPatch } fr
 import { config } from '../../config.js';
 import { prisma } from '../../lib/db.js';
 import { notFound } from '../../lib/errors.js';
+import { gmailStatus } from '../gmail/gmail.service.js';
 
 export async function getOrganisation(orgId: string): Promise<{ org: Organisation; members: Member[] }> {
   const org = await prisma.organisation.findUnique({
@@ -21,7 +22,8 @@ export async function getOrganisation(orgId: string): Promise<{ org: Organisatio
         config.inboundEmailDomain && config.inboundWebhookSecret
           ? `${org.inboundSlug}@${config.inboundEmailDomain}`
           : null,
-      settings: OrgSettings.parse(org.settings)
+      settings: OrgSettings.parse(org.settings),
+      gmail: await gmailStatus(orgId)
     },
     members: org.memberships.map(({ user, role }) => ({ id: user.id, name: user.name, email: user.email, role }))
   };

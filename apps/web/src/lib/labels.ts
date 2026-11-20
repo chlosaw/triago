@@ -1,4 +1,4 @@
-import type { Category, Priority, Status } from '@triago/shared';
+import type { Category, Priority, SettableStatus, Status } from '@triago/shared';
 
 export const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: 'bug', label: 'Bug' },
@@ -14,29 +14,25 @@ export const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: 'urgent', label: 'Urgent' }
 ];
 
-/** Statuses a triaged ticket moves through, in board order. */
-export const STATUS_OPTIONS: { value: Status; label: string }[] = [
-  { value: 'open', label: 'Open' },
-  { value: 'waiting', label: 'Waiting on customer' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' }
+/**
+ * The four statuses people see. Each is one `SettableStatus` the API accepts, plus
+ * the stored statuses shown under it: legacy `resolved` and triage `dismissed` count as Closed.
+ */
+export const STATUS_COLUMNS: { value: SettableStatus; label: string; statuses: readonly Status[] }[] = [
+  { value: 'new', label: 'New', statuses: ['new'] },
+  { value: 'open', label: 'In progress', statuses: ['open'] },
+  { value: 'waiting', label: 'On hold', statuses: ['waiting'] },
+  { value: 'closed', label: 'Closed', statuses: ['closed', 'resolved', 'dismissed'] }
 ];
 
-export type StatusGroup = 'new' | 'waiting' | 'closed';
+export const STATUS_OPTIONS = STATUS_COLUMNS.map(({ value, label }) => ({ value, label }));
 
-/** How the dashboard groups statuses: not started, waiting on the customer, done. */
-export const STATUS_GROUPS: { value: StatusGroup; label: string; statuses: readonly Status[] }[] = [
-  { value: 'new', label: 'New', statuses: ['new', 'open'] },
-  { value: 'waiting', label: 'Waiting', statuses: ['waiting'] },
-  { value: 'closed', label: 'Closed', statuses: ['resolved', 'closed'] }
-];
+/** Which of the four statuses a stored status shows as. */
+export const displayStatus = (status: Status): SettableStatus =>
+  STATUS_COLUMNS.find((column) => column.statuses.includes(status))!.value;
 
-/** The status an agent picks for each group in the dashboard table. */
-export const GROUP_STATUS_OPTIONS: { value: Status; label: string }[] = [
-  { value: 'open', label: 'New' },
-  { value: 'waiting', label: 'Waiting' },
-  { value: 'closed', label: 'Closed' }
-];
+export const statusLabel = (status: Status) =>
+  STATUS_COLUMNS.find((column) => column.value === displayStatus(status))!.label;
 
 export const priorityLabel = (priority: Priority) =>
   PRIORITY_OPTIONS.find((option) => option.value === priority)?.label ?? priority;
@@ -55,4 +51,11 @@ export function formatReceived(iso: string): string {
   }
   if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** "2.4 MB", "830 KB", "512 B". */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

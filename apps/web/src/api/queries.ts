@@ -6,9 +6,11 @@ import {
   useQueryClient,
   type InfiniteData
 } from '@tanstack/react-query';
-import { api } from './client';
 import type {
+  Attachment,
   Category,
+  CorrectTextResult,
+  CreateTicketBody,
   Member,
   Message,
   Organisation,
@@ -16,26 +18,29 @@ import type {
   Priority,
   Stats,
   StatsRange,
+  SettableStatus,
   Status,
   Ticket,
   TicketEvent,
+  TicketLink,
   TicketPage
 } from '@triago/shared';
-
-export const QUEUE_VIEWS = {
-  pending: ['new'],
-  accepted: ['open', 'waiting', 'resolved', 'closed'],
-  dismissed: ['dismissed']
-} as const satisfies Record<string, readonly Status[]>;
-
-export type QueueView = keyof typeof QUEUE_VIEWS;
+import { api, apiDownload, apiUpload } from './client';
 
 export type TicketSort = 'received' | 'triaged';
 
-function ticketsUrl(statuses: readonly Status[], sort: TicketSort, limit: number, cursor: string | null, q = '') {
-  const params = new URLSearchParams({ status: statuses.join(','), sort, limit: String(limit) });
+interface TicketFilter {
+  q?: string;
+  /** "me" for the signed-in member. */
+  assignee?: 'me';
+  limit?: number;
+}
+
+function ticketsUrl(statuses: readonly Status[], sort: TicketSort, cursor: string | null, filter: TicketFilter) {
+  const params = new URLSearchParams({ status: statuses.join(','), sort, limit: String(filter.limit ?? 25) });
   if (cursor) params.set('cursor', cursor);
-  if (q.trim()) params.set('q', q.trim());
+  if (filter.q?.trim()) params.set('q', filter.q.trim());
+  if (filter.assignee) params.set('assignee', filter.assignee);
   return `/tickets?${params}`;
 }
 
@@ -43,14 +48,14 @@ function ticketsUrl(statuses: readonly Status[], sort: TicketSort, limit: number
 export function useTicketPages(
   statuses: readonly Status[],
   sort: TicketSort = 'received',
-  q = '',
-  /** Milliseconds between background refetches, e.g. while waiting for inbound mail. */
+  filter: TicketFilter = {},
+  /** Milliseconds between background refetches, e.g. while waiting for new mail. */
   refetchInterval: number | false = false
 ) {
   return useInfiniteQuery({
     refetchInterval,
-    queryKey: ['tickets', statuses, sort, q.trim()],
-    queryFn: ({ pageParam }) => api<TicketPage>(ticketsUrl(statuses, sort, 25, pageParam, q)),
+    queryKey: ['tickets', statuses, sort, filter.q?.trim() ?? '', filter.assignee ?? null, filter.limit ?? 25],
+    queryFn: ({ pageParam }) => api<TicketPage>(ticketsUrl(statuses, sort, pageParam, filter)),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     select: (data) => data.pages.flatMap((page) => page.tickets),
@@ -62,7 +67,7 @@ export function useTicketPages(
 export function useTicket(id: string | null) {
   return useQuery({
     queryKey: ['ticket', id],
-    queryFn: () => api<{ ticket: Ticket; messages: Message[] }>(`/tickets/${id}`),
+    queryFn: () => api<{ ticket: Ticket; messages: Message[]; attachments: Attachment[] }>(`/tickets/${id}`),
     enabled: id !== null
   });
 }
@@ -176,14 +181,14 @@ export function useTicketActions() {
       ...optimistic
     }),
     returnToQueue: useMutation({ mutationFn: (id: string) => post(`/tickets/${id}/return-to-queue`), onSuccess }),
-    create: useMutation({ mutationFn: (title: string) => post('/tickets', { title }), onSuccess }),
+    create: useMutation({ mutationFn: (body: CreateTicketBody) => post('/tickets', body), onSuccess }),
     update: useMutation({
       mutationFn: ({
         id,
         patch
       }: {
         id: string;
-        patch: TicketEdits & { status?: Status; assigneeId?: string | null };
+        patch: TicketEdits & { status?: SettableStatus; assigneeId?: string | null; links?: TicketLink[] };
       }) => api<{ ticket: Ticket }>(`/tickets/${id}`, { method: 'PATCH', body: patch }),
       onSuccess
     }),
@@ -217,12 +222,64 @@ export function useNoteActions(ticketId: string) {
   };
 }
 
+export interface SyncResult {
+  imported: Ticket | null;
+  importedCount: number;
+  remaining: number;
+  source: 'gmail' | 'sample';
+}
+
 export function useSyncInbox() {
-  const onSuccess = useInvalidateTickets();
+  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTickets();
   return useMutation({
-    mutationFn: () => api<{ imported: Ticket | null; remaining: number }>('/emails/sync', { method: 'POST' }),
-    onSuccess
+    mutationFn: () => api<SyncResult>('/emails/sync', { method: 'POST' }),
+    onSuccess: () => Promise.all([invalidate(), queryClient.invalidateQueries({ queryKey: ['org'] })])
   });
+}
+
+/** Upload, download and delete files on one ticket. */
+export function useAttachmentActions(ticketId: string) {
+  const queryClient = useQueryClient();
+  const onSuccess = () => queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
+  const base = `/tickets/${ticketId}/attachments`;
+  return {
+    upload: useMutation({
+      mutationFn: (file: File) => uploadAttachment(ticketId, file),
+      onSuccess
+    }),
+    remove: useMutation({
+      mutationFn: (id: string) => api<void>(`${base}/${id}`, { method: 'DELETE' }),
+      onSuccess
+    }),
+    download: (attachment: Attachment) => apiDownload(`${base}/${attachment.id}`, attachment.filename)
+  };
+}
+
+export function uploadAttachment(ticketId: string, file: File) {
+  return apiUpload<{ attachment: Attachment }>(`/tickets/${ticketId}/attachments`, file);
+}
+
+/** Spelling and grammar check for a piece of text. */
+export function useCorrectText() {
+  return useMutation({
+    mutationFn: (text: string) => api<CorrectTextResult>('/text/correct', { method: 'POST', body: { text } })
+  });
+}
+
+export function useGmailActions() {
+  const queryClient = useQueryClient();
+  return {
+    connect: useMutation({
+      mutationFn: () => api<{ url: string }>('/gmail/connect', { method: 'POST' }),
+      // Off to Google's consent screen; it sends the browser back to /settings.
+      onSuccess: ({ url }) => window.location.assign(url)
+    }),
+    disconnect: useMutation({
+      mutationFn: () => api<void>('/gmail', { method: 'DELETE' }),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['org'] })
+    })
+  };
 }
 
 export function useUpdateSettings() {

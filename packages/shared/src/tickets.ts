@@ -12,17 +12,36 @@ export type Category = (typeof CATEGORIES)[number];
 export type Source = (typeof SOURCES)[number];
 export type Sort = (typeof SORTS)[number];
 
-/** Statuses an agent sets directly; `new` and `dismissed` only change through triage. */
-export const WORKFLOW_STATUSES = ['open', 'waiting', 'resolved', 'closed'] as const satisfies readonly Status[];
+/**
+ * The four statuses people work with. In the UI: `new` = New, `open` = In progress,
+ * `waiting` = On hold, `closed` = Closed. The legacy `resolved` and the triage-only
+ * `dismissed` are shown as Closed.
+ */
+export const SETTABLE_STATUSES = ['new', 'open', 'waiting', 'closed'] as const satisfies readonly Status[];
+export type SettableStatus = (typeof SETTABLE_STATUSES)[number];
 
 const Title = z.string().trim().min(1, 'Title is required.').max(200);
-const Summary = z.string().trim().max(2000);
+const Summary = z.string().trim().max(5000, 'Keep the description under 5000 characters.');
+
+export const TicketLink = z.object({
+  url: z
+    .string()
+    .trim()
+    .max(2000)
+    .pipe(z.url({ protocol: /^https?$/, message: 'Enter a full http:// or https:// link.' })),
+  title: z.string().trim().max(200).default('')
+});
+export type TicketLink = z.infer<typeof TicketLink>;
+const Links = z.array(TicketLink).max(20, 'Add at most 20 links.');
 
 export const CreateTicketBody = z.object({
   title: Title,
   summary: Summary.optional(),
   category: z.enum(CATEGORIES).optional(),
-  priority: z.enum(PRIORITIES).optional()
+  priority: z.enum(PRIORITIES).optional(),
+  status: z.enum(SETTABLE_STATUSES).optional(),
+  assigneeId: z.uuid().nullable().optional(),
+  links: Links.optional()
 });
 export type CreateTicketBody = z.infer<typeof CreateTicketBody>;
 
@@ -32,8 +51,9 @@ export const PatchTicketBody = z
     summary: Summary,
     category: z.enum(CATEGORIES),
     priority: z.enum(PRIORITIES),
-    status: z.enum(STATUSES),
-    assigneeId: z.uuid().nullable()
+    status: z.enum(SETTABLE_STATUSES),
+    assigneeId: z.uuid().nullable(),
+    links: Links
   })
   .partial()
   .strict();
@@ -65,6 +85,7 @@ export interface Ticket {
   source: Source;
   requester: { name: string; email: string | null };
   assignee: { id: string; name: string } | null;
+  links: TicketLink[];
   aiConfidence: number | null;
   receivedAt: string;
   triagedAt: string | null;
@@ -95,4 +116,28 @@ export interface TicketEvent {
   actor: string | null;
   data: Record<string, unknown>;
   createdAt: string;
+}
+
+/** A file attached to a ticket; download it from /tickets/:id/attachments/:attachmentId. */
+export interface Attachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  createdAt: string;
+}
+
+/** Largest file a ticket attachment may be, in bytes. */
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+export const MAX_ATTACHMENTS_PER_TICKET = 20;
+
+/** Text to check for spelling and grammar. */
+export const CorrectTextBody = z.object({ text: z.string().max(5000) });
+export type CorrectTextBody = z.infer<typeof CorrectTextBody>;
+
+export interface CorrectTextResult {
+  text: string;
+  changed: boolean;
+  /** `ai` when a language model checked it, `rules` for the built-in spelling and punctuation fixes. */
+  engine: 'ai' | 'rules';
 }

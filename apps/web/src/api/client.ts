@@ -47,33 +47,68 @@ interface RequestOptions {
   body?: unknown;
 }
 
-export async function api<T>(path: string, { method = 'GET', body }: RequestOptions = {}): Promise<T> {
-  const send = () =>
+/** Sends a request with the access token, refreshing it once on a 401. */
+async function send(path: string, init: { method: string; headers?: Record<string, string>; body?: BodyInit }) {
+  const attempt = () =>
     fetch(`/api${path}`, {
-      method,
+      ...init,
       credentials: 'include',
-      headers: {
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
-      },
-      body: body === undefined ? undefined : JSON.stringify(body)
+      headers: { ...init.headers, ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) }
     });
 
-  let res = await send();
+  let res = await attempt();
   if (res.status === 401 && accessToken && !path.startsWith('/auth/')) {
     if (await refreshSession()) {
-      res = await send();
+      res = await attempt();
     } else {
       setAccessToken(null);
       onSessionExpired();
     }
   }
+  return res;
+}
+
+async function readError(res: Response): Promise<ApiError> {
+  const data = await res.json().catch(() => ({}));
+  const error = data.error ?? {};
+  return new ApiError(res.status, error.code ?? 'UNKNOWN', error.message ?? 'Request failed.', error.fields);
+}
+
+/** Uploads a file as raw bytes; the name and type travel in headers. */
+export async function apiUpload<T>(path: string, file: File): Promise<T> {
+  const res = await send(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'X-Filename': encodeURIComponent(file.name),
+      'X-Content-Type': file.type || 'application/octet-stream'
+    },
+    body: file
+  });
+  if (!res.ok) throw await readError(res);
+  return (await res.json()) as T;
+}
+
+/** Downloads a file that needs the access token, then hands it to the browser as a normal download. */
+export async function apiDownload(path: string, filename: string): Promise<void> {
+  const res = await send(path, { method: 'GET' });
+  if (!res.ok) throw await readError(res);
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export async function api<T>(path: string, { method = 'GET', body }: RequestOptions = {}): Promise<T> {
+  const res = await send(path, {
+    method,
+    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
 
   if (res.status === 204) return undefined as T;
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const error = data.error ?? {};
-    throw new ApiError(res.status, error.code ?? 'UNKNOWN', error.message ?? 'Request failed.', error.fields);
-  }
-  return data as T;
+  if (!res.ok) throw await readError(res);
+  return (await res.json().catch(() => ({}))) as T;
 }

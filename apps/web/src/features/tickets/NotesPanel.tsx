@@ -1,6 +1,7 @@
 import { NoteBody, type Message } from '@triago/shared';
 import { useId, useState, type FormEvent } from 'react';
 import { useNoteActions } from '../../api/queries';
+import { GrammarButton } from './GrammarButton';
 import { ErrorState } from '../../components/QueryState';
 import { useProfile } from '../auth/context';
 
@@ -134,6 +135,7 @@ export function NoteForm({ initial = '', submitLabel, pending, serverError, onSu
           if (error) setError('');
         }}
       />
+      <GrammarButton value={body} onChange={setBody} />
       {shownError && (
         <span id={errorId} className="field-error" role="alert">
           {shownError}

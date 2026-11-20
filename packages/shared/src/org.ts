@@ -31,6 +31,16 @@ export interface Organisation {
   /** Email sent here becomes a drafted ticket; null when inbound mail is not configured. */
   inboundAddress: string | null;
   settings: OrgSettings;
+  gmail: GmailStatus;
+}
+
+export interface GmailStatus {
+  /** False when the server has no Google OAuth client configured. */
+  available: boolean;
+  /** The connected mailbox, or null when none is connected. */
+  email: string | null;
+  connectedAt: string | null;
+  lastSyncedAt: string | null;
 }
 
 export interface Member {

@@ -1,46 +1,75 @@
+import type { SettableStatus } from '@triago/shared';
 import { useMutationState } from '@tanstack/react-query';
 import { useState } from 'react';
-import {
-  QUEUE_VIEWS,
-  TRIAGE_MUTATION_KEY,
-  useOrg,
-  useStats,
-  useSyncInbox,
-  useTicketPages,
-  type QueueView
-} from '../api/queries';
+import { useSearchParams } from 'react-router-dom';
+import { TRIAGE_MUTATION_KEY, useOrg, useStats, useSyncInbox, useTicketPages } from '../api/queries';
 import { ErrorState, QueryState } from '../components/QueryState';
 import { Segmented } from '../components/Segmented';
 import { QueueRow } from '../features/tickets/QueueRow';
-import { InboundAddress } from '../features/tickets/InboundAddress';
 import { TicketDetail } from '../features/tickets/TicketDetail';
+import { STATUS_COLUMNS } from '../lib/labels';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 
+const isColumn = (value: string | null): value is SettableStatus => STATUS_COLUMNS.some((c) => c.value === value);
+
 export function QueuePage() {
-  const [view, setView] = useState<QueueView>('pending');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The status tab and the open ticket live in the URL, so other pages can link straight to a ticket.
+  const [params, setParams] = useSearchParams();
+  const view: SettableStatus = isColumn(params.get('status')) ? (params.get('status') as SettableStatus) : 'new';
+  const selectedId = params.get('ticket');
+  const select = (next: { status?: SettableStatus; ticket?: string | null }) =>
+    setParams(
+      (current) => {
+        const updated = new URLSearchParams(current);
+        if (next.status) updated.set('status', next.status);
+        if (next.ticket === null) updated.delete('ticket');
+        else if (next.ticket) updated.set('ticket', next.ticket);
+        return updated;
+      },
+      { replace: true }
+    );
+  const setView = (status: SettableStatus) => select({ status, ticket: null });
+  const setSelectedId = (ticket: string) => select({ ticket });
+  const column = STATUS_COLUMNS.find((c) => c.value === view)!;
   // On narrow screens the list and the detail take turns; this is true while the detail is showing.
   const [detailOpen, setDetailOpen] = useState(false);
   const [search, setSearch] = useState('');
   // Query the API once typing pauses, not on every keystroke.
   const debouncedSearch = useDebouncedValue(search, 300);
   const org = useOrg().data?.org;
-  // While a real inbox feeds this organisation, check the pending queue for new mail every few seconds.
-  const poll = org?.inboundAddress && view === 'pending' ? 5_000 : false;
-  const ticketsQuery = useTicketPages(QUEUE_VIEWS[view], 'received', debouncedSearch, poll);
+  // While Gmail feeds this organisation, refresh the New tab now and then; the server syncs in the background.
+  const gmailEmail = org?.gmail.email ?? null;
+  const poll = gmailEmail && view === 'new' ? 30_000 : false;
+  const ticketsQuery = useTicketPages(column.statuses, 'received', { q: debouncedSearch }, poll);
   const searching = debouncedSearch.trim() !== '';
   const triageError = useLatestTriageError();
   const tickets = ticketsQuery.data ?? [];
-  const pendingCount = useStats('week', poll).data?.awaitingTriage ?? 0;
+  const stats = useStats('week', poll).data;
+  const countOf = (statuses: readonly string[]) =>
+    statuses.reduce((sum, status) => sum + (stats?.byStatus[status as SettableStatus] ?? 0), 0);
   const label = org?.settings.mailboxLabel ?? 'support';
   const sync = useSyncInbox();
 
   // Keep the selection on screen: fall back to the first ticket in the view.
   const selected = tickets.find((ticket) => ticket.id === selectedId) ?? tickets[0] ?? null;
 
-  // Gmail sync is not built yet; the button imports from a fixed sample mailbox.
-  const inboxEmpty = sync.data?.remaining === 0;
-  const syncLabel = sync.isPending ? 'Syncing…' : inboxEmpty ? 'Sample inbox empty' : 'Pull new mail';
+  // With Gmail connected the button checks the mailbox now; without it, it imports from a sample mailbox.
+  const sampleEmpty = !gmailEmail && sync.data?.source === 'sample' && sync.data.remaining === 0;
+  const syncLabel = sync.isPending
+    ? 'Checking…'
+    : gmailEmail
+      ? 'Check Gmail'
+      : sampleEmpty
+        ? 'Sample inbox empty'
+        : 'Pull sample email';
+  const syncNote =
+    sync.data && !sync.isPending
+      ? sync.data.importedCount === 0
+        ? 'No new mail.'
+        : `Imported ${sync.data.importedCount} email${sync.data.importedCount === 1 ? '' : 's'}${
+            sync.data.remaining > 0 ? `; ${sync.data.remaining} more on the next check` : ''
+          }.`
+      : '';
 
   return (
     <div className={`queue-shell ${detailOpen ? 'detail-open' : ''}`}>
@@ -48,18 +77,25 @@ export function QueuePage() {
         <div className="queue-toolbar">
           <div className="queue-header-row">
             <h2>Queue</h2>
-            <span className="watch-flag">#{label}</span>
+            {gmailEmail && (
+              <span className="watch-flag" title={`Watching ${gmailEmail}`}>
+                #{label}
+              </span>
+            )}
             <button
               type="button"
               className="btn btn-ghost"
-              disabled={sync.isPending || inboxEmpty}
-              title="Imports the next email from a sample mailbox. Gmail sync is planned."
+              disabled={sync.isPending || sampleEmpty}
+              title={
+                gmailEmail
+                  ? `Imports new mail from ${gmailEmail} now. It also checks every two minutes.`
+                  : 'Imports the next email from a sample mailbox. Connect Gmail in Settings for real mail.'
+              }
               onClick={() =>
                 sync.mutate(undefined, {
                   onSuccess: ({ imported }) => {
                     if (imported) {
-                      setView('pending');
-                      setSelectedId(imported.id);
+                      select({ status: 'new', ticket: imported.id });
                       setDetailOpen(true);
                     }
                   }
@@ -69,9 +105,13 @@ export function QueuePage() {
               {syncLabel}
             </button>
           </div>
-          {org?.inboundAddress && <InboundAddress address={org.inboundAddress} />}
+          {syncNote && (
+            <span className="sync-note" role="status">
+              {syncNote}
+            </span>
+          )}
           {sync.error && <ErrorState message={sync.error.message} />}
-          {triageError && <ErrorState message={`The ticket is back in the queue. ${triageError}`} />}
+          {triageError && <ErrorState message={`The ticket is back in New. ${triageError}`} />}
           <label className="visually-hidden" htmlFor="queue-search">
             Search tickets
           </label>
@@ -85,14 +125,13 @@ export function QueuePage() {
             onChange={(event) => setSearch(event.target.value)}
           />
           <Segmented
-            label="Queue view"
+            label="Status"
             value={view}
             onChange={setView}
-            options={[
-              { value: 'pending', label: `Pending ${pendingCount}` },
-              { value: 'accepted', label: 'Accepted' },
-              { value: 'dismissed', label: 'Dismissed' }
-            ]}
+            options={STATUS_COLUMNS.map((c) => ({
+              value: c.value,
+              label: stats ? `${c.label} ${countOf(c.statuses)}` : c.label
+            }))}
           />
         </div>
 
@@ -110,7 +149,11 @@ export function QueuePage() {
               ) : (
                 <>
                   <div className="queue-empty-title">Nothing here</div>
-                  New mail in the watched label lands in Pending.
+                  {view === 'new'
+                    ? gmailEmail
+                      ? 'New mail in the watched Gmail label lands here.'
+                      : 'New tickets and imported email land here.'
+                    : `No tickets are ${column.label.toLowerCase()}.`}
                 </>
               )
             }

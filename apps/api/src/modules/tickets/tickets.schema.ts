@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 export const TicketId = z.uuid('Ticket not found.');
 export const NoteId = z.uuid('Note not found.');
+export const AttachmentId = z.uuid('Attachment not found.');
 
 export const ListQuery = z.object({
   // Comma-separated, e.g. ?status=open,waiting
@@ -23,6 +24,8 @@ export const ListQuery = z.object({
     .max(200)
     .optional()
     .transform((value) => value || undefined),
+  // Only tickets assigned to this member; "me" means the caller.
+  assignee: z.union([z.literal('me'), z.uuid('Invalid assignee.')]).optional(),
   // The id of the last ticket on the previous page.
   cursor: z.uuid('Invalid cursor.').optional()
 });

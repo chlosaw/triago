@@ -17,8 +17,8 @@ const OPTION_LABELS: Record<string, string> = Object.fromEntries(
     ...CATEGORY_OPTIONS,
     ...PRIORITY_OPTIONS,
     ...STATUS_OPTIONS,
-    { value: 'new', label: 'Pending' },
-    { value: 'dismissed', label: 'Dismissed' }
+    { value: 'resolved', label: 'Closed' },
+    { value: 'dismissed', label: 'Closed' }
   ].map((option) => [option.value, option.label])
 );
 
@@ -50,9 +50,13 @@ export function describeEvent(event: TicketEvent, members: Member[]): string {
       return `accepted the draft with corrections: ${list}`;
     }
     case 'dismissed':
-      return 'dismissed the draft';
+      return 'closed the draft without filing it';
     case 'returned_to_queue':
-      return 'moved it back to pending';
+      return 'moved it back to New';
+    case 'links_changed':
+      return Number(data.count) === 1
+        ? 'updated the links (1 link)'
+        : `updated the links (${Number(data.count)} links)`;
     case 'field_changed': {
       const field = String(data.field);
       const change = data as unknown as Change;

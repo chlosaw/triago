@@ -29,7 +29,7 @@ describe('activity descriptions', () => {
       'assigned it to Ada'
     );
     expect(describeEvent(event('field_changed', { field: 'status', from: 'open', to: 'waiting' }), members)).toBe(
-      'changed status from Open to Waiting on customer'
+      'changed status from In progress to On hold'
     );
   });
 });
