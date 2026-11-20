@@ -132,7 +132,7 @@ export async function downloadAttachment(req: Request, res: Response) {
 
 export async function deleteAttachment(req: Request, res: Response) {
   await attachments.deleteAttachment(
-    getAuth(req).orgId,
+    getAuth(req),
     TicketId.parse(req.params.id),
     AttachmentId.parse(req.params.attachmentId)
   );

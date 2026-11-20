@@ -4,7 +4,7 @@ import { useTicket, useTicketActions, type TicketEdits } from '../../api/queries
 import { Corners } from '../../components/Card';
 import { ErrorState } from '../../components/QueryState';
 import { Segmented } from '../../components/Segmented';
-import { CATEGORY_OPTIONS, PRIORITY_OPTIONS, percent, statusLabel } from '../../lib/labels';
+import { CATEGORY_OPTIONS, MANUAL_TRIAGE, PRIORITY_OPTIONS, percent, statusLabel } from '../../lib/labels';
 import { ActivityTimeline } from './ActivityTimeline';
 import { AssigneeSelect } from './AssigneeSelect';
 import { AttachmentsPanel } from './AttachmentsPanel';
@@ -22,6 +22,11 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
     <section className="detail-panel">
       <span className="detail-kicker">{ticket.source === 'email' ? 'Source email' : 'Manual ticket'}</span>
       <h3>{ticket.title}</h3>
+      {ticket.manualTriage && (
+        <div className={`triage-note triage-${ticket.manualTriage}`} role="note">
+          <strong>{MANUAL_TRIAGE[ticket.manualTriage].label}</strong> {MANUAL_TRIAGE[ticket.manualTriage].note}
+        </div>
+      )}
       <div className="source-grid">
         {(ticket.requester.name || ticket.requester.email) && (
           <>

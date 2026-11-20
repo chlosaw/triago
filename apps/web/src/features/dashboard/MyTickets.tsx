@@ -4,7 +4,7 @@ import { useTicketPages } from '../../api/queries';
 import { Card } from '../../components/Card';
 import { QueryState } from '../../components/QueryState';
 import { displayStatus, formatReceived, STATUS_COLUMNS } from '../../lib/labels';
-import { PriorityBadge } from '../tickets/TicketBadges';
+import { PriorityBadge, TriageBadge } from '../tickets/TicketBadges';
 import { StatusSelect } from '../tickets/StatusSelect';
 
 /** Closed tickets are folded away after this many, so the list stays about open work. */
@@ -87,6 +87,7 @@ function TicketList({ tickets }: { tickets: Ticket[] }) {
           >
             {ticket.title}
           </Link>
+          <TriageBadge reason={ticket.manualTriage} />
           <PriorityBadge priority={ticket.priority} />
           <StatusSelect ticket={ticket} />
           <span className="my-time">{formatReceived(ticket.receivedAt)}</span>

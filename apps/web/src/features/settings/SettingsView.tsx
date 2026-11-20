@@ -5,6 +5,8 @@ import { ErrorState } from '../../components/QueryState';
 import { Segmented } from '../../components/Segmented';
 import { Toggle } from '../../components/Toggle';
 import { useProfile } from '../auth/context';
+import { RETENTION_DAYS } from '@triago/shared';
+import { DangerZone } from './DangerZone';
 import { GmailCard } from './GmailCard';
 
 export function SettingsView({ org, members }: { org: Organisation; members: Member[] }) {
@@ -61,6 +63,33 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
               onChange={(skipBulkMail) => save({ skipBulkMail })}
             />
 
+            <div className="setting-block">
+              <label className="mini-label" htmlFor="retention">
+                Keep closed tickets
+              </label>
+              <select
+                id="retention"
+                className="input retention-select"
+                disabled={readOnly}
+                value={settings.retentionDays}
+                onChange={(event) => save({ retentionDays: Number(event.target.value) })}
+              >
+                {RETENTION_DAYS.map((days) => (
+                  <option key={days} value={days}>
+                    {days === 0
+                      ? 'Until deleted'
+                      : days >= 365
+                        ? `${days / 365} year${days > 365 ? 's' : ''}`
+                        : `${days} days`}
+                  </option>
+                ))}
+              </select>
+              <span className="helper-line">
+                Closed tickets, with their emails, notes and files, are deleted this long after their last change.
+                Checked every night.
+              </span>
+            </div>
+
             {/* Shown so the direction is visible, but disabled: nothing reads these yet. */}
             <fieldset className="planned" disabled>
               <legend>
@@ -107,6 +136,7 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
             </fieldset>
           </div>
         </Card>
+        {!readOnly && <DangerZone org={org} />}
       </div>
 
       <Card as="aside" className="account-sidebar">

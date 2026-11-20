@@ -2887,3 +2887,94 @@ details[open] > summary.my-group-head::after {
     right: 16px;
   }
 }
+
+/* Manual triage: badge in lists, note on the ticket */
+.triage-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #f87168 60%, transparent);
+  background: color-mix(in srgb, #f87168 12%, transparent);
+  color: color-mix(in srgb, #f87168 45%, #fff);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.triage-badge.triage-drafting {
+  border-color: color-mix(in srgb, var(--status-open) 55%, transparent);
+  background: color-mix(in srgb, var(--status-open) 12%, transparent);
+  color: color-mix(in srgb, var(--status-open) 40%, #fff);
+}
+.triage-badge.triage-spam {
+  border-color: var(--color-divider);
+  background: transparent;
+  color: var(--color-muted);
+}
+.triage-note {
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, #f87168 45%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, #f87168 8%, transparent);
+  font-size: 13px;
+}
+.triage-note.triage-drafting {
+  border-color: color-mix(in srgb, var(--status-open) 45%, transparent);
+  background: color-mix(in srgb, var(--status-open) 8%, transparent);
+}
+.triage-note.triage-spam {
+  border-color: var(--color-divider);
+  background: var(--color-surface);
+}
+.my-row {
+  grid-template-columns: 76px minmax(0, 1fr) auto auto 140px 84px;
+}
+
+/* Sign-in: forgot password link under the password field */
+.forgot-link {
+  align-self: flex-end;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.forgot-link:hover {
+  color: var(--color-text);
+}
+
+/* Settings: backfill, retention, danger zone */
+.backfill-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-divider);
+}
+.retention-select {
+  max-width: 240px;
+}
+.danger-card {
+  margin-top: 20px;
+  border-color: color-mix(in srgb, #f87168 35%, transparent);
+}
+.danger-card h3 {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.danger-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+}
+.btn-danger {
+  border: 1px solid #f87168;
+  background: transparent;
+  color: #ff9c94;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #f87168;
+  color: #000;
+}
+
+@media (max-width: 720px) {
+  .my-row {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+  }
+}

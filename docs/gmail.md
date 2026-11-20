@@ -2,7 +2,7 @@
 
 An organisation admin can connect one Gmail mailbox in **Settings → Mail intake → Connect Gmail**. Triago then checks the watched label every two minutes (and whenever someone clicks **Check Gmail** in the queue). It drafts a ticket in **New** for each email from the last 7 days that it has not seen before.
 
-Triago asks for read-only access (`gmail.readonly`). It never sends, labels or deletes mail. The refresh token is stored encrypted (AES-256-GCM, with a key derived from `JWT_SECRET`), so changing `JWT_SECRET` means reconnecting Gmail.
+Triago asks for read-only access (`gmail.readonly`). It never sends, labels or deletes mail. The refresh token is stored encrypted (AES-256-GCM). Set `TOKEN_ENCRYPTION_KEY` (`openssl rand -base64 48`) so the key is separate from `JWT_SECRET`; without it, a key derived from `JWT_SECRET` is used, and changing `JWT_SECRET` then means reconnecting Gmail. Tokens saved before you add the key keep working.
 
 ## 1. Create a Google OAuth client
 
@@ -36,7 +36,9 @@ GOOGLE_CLIENT_SECRET=GOCSPX-...
    - **Support** / **Bugs**: only mail with that Gmail label. Create the label in Gmail first, ideally with a filter that applies it automatically.
 4. **Skip newsletters and notifications** leaves out Gmail's Promotions, Social, Updates and Forums categories.
 
-Each check imports at most 5 emails (each can call the AI model); the rest come in on the next check.
+Each check saves up to 25 emails straight away; their AI drafts run as background jobs, three at a time. The rest come in on the next check.
+
+**Older mail.** Settings → **Import older mail** brings in the last 30 days, 90 days or year from the watched label, in the background, 100 emails per step. Emails already imported are skipped, and a message Triago can't read becomes a placeholder ticket linking to it in Gmail.
 
 ## Troubleshooting
 
@@ -47,3 +49,7 @@ Each check imports at most 5 emails (each can call the AI model); the rest come 
 | Google says "Access blocked: app has not completed verification" | The account is not on the consent screen's test-user list.                                                      |
 | "Reconnect Gmail in Settings"                                    | Access was revoked in the Google account, the token expired (test apps: after 7 days), or `JWT_SECRET` changed. |
 | Connected, but nothing imports                                   | The watched label has no mail from the last 7 days, or the label doesn't exist in Gmail.                        |
+
+## Security notes
+
+- The connect link only works in the browser that clicked **Connect Gmail**: a one-time cookie is checked against the signed `state` when Google sends the admin back. A consent link forwarded to someone else is refused, so nobody can trick another person into connecting their mailbox to the wrong organisation.

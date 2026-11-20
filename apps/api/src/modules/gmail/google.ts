@@ -89,10 +89,20 @@ async function gmail<T>(token: string, path: string): Promise<T> {
 
 export const getProfile = (token: string) => gmail<{ emailAddress: string }>(token, '/profile');
 
-export async function listMessageIds(token: string, query: string, max: number): Promise<string[]> {
+/** One page of message ids matching a Gmail search, newest first. */
+export async function listMessages(
+  token: string,
+  query: string,
+  max: number,
+  pageToken?: string | null
+): Promise<{ ids: string[]; nextPageToken: string | null }> {
   const params = new URLSearchParams({ q: query, maxResults: String(max) });
-  const { messages = [] } = await gmail<{ messages?: { id: string }[] }>(token, `/messages?${params}`);
-  return messages.map((message) => message.id);
+  if (pageToken) params.set('pageToken', pageToken);
+  const { messages = [], nextPageToken } = await gmail<{ messages?: { id: string }[]; nextPageToken?: string }>(
+    token,
+    `/messages?${params}`
+  );
+  return { ids: messages.map((message) => message.id), nextPageToken: nextPageToken ?? null };
 }
 
 /** The full RFC 822 message. */

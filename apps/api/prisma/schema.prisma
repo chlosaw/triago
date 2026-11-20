@@ -93,13 +93,14 @@ model User {
   name         String
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  memberships      Membership[]
-  refreshTokens    RefreshToken[]
-  assignedTickets  Ticket[]          @relation("assignee")
-  messages         Message[]
-  events           TicketEvent[]
-  attachments      Attachment[]
-  gmailConnections GmailConnection[]
+  memberships         Membership[]
+  refreshTokens       RefreshToken[]
+  assignedTickets     Ticket[]             @relation("assignee")
+  messages            Message[]
+  events              TicketEvent[]
+  attachments         Attachment[]
+  gmailConnections    GmailConnection[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
 }
@@ -154,6 +155,12 @@ model Ticket {
   aiConfidence   Float?         @map("ai_confidence")
   /// Provider message id, so a mailbox sync never imports the same email twice.
   externalId     String?        @map("external_id")
+  /// The email's Message-ID header. Unique per organisation, so one email that arrives
+  /// through two channels (Gmail and inbound forwarding) becomes one ticket.
+  messageId      String?        @map("message_id")
+  /// Why a person must triage this ticket by hand: the AI is still drafting it ("drafting"),
+  /// the AI failed, or the email was held back (rate limit, size, spam, unreadable). Null when drafted normally.
+  manualTriage   String?        @map("manual_triage")
   receivedAt     DateTime       @default(now()) @map("received_at") @db.Timestamptz
   triagedAt      DateTime?      @map("triaged_at") @db.Timestamptz
   /// Related links as [{ url, title }].
@@ -170,6 +177,7 @@ model Ticket {
   @@unique([orgId, id])
   @@unique([orgId, number])
   @@unique([orgId, externalId])
+  @@unique([orgId, messageId])
   @@index([orgId, status, receivedAt(sort: Desc)])
   @@map("tickets")
 }
@@ -242,4 +250,19 @@ model GmailConnection {
   connectedBy User?        @relation(fields: [connectedById], references: [id], onDelete: SetNull)
 
   @@map("gmail_connections")
+}
+
+/// A single-use password reset link. Only a hash of the token is stored.
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }

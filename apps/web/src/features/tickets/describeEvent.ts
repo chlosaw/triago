@@ -32,6 +32,7 @@ export function describeEvent(event: TicketEvent, members: Member[]): string {
   switch (event.type) {
     case 'created':
       if (data.source !== 'email') return 'created the ticket';
+      if (!data.classifier) return 'imported the email';
       // 'claude' is kept for tickets drafted before the switch to Groq.
       return data.classifier === 'groq' || data.classifier === 'claude'
         ? 'imported the email; AI drafted the ticket'
@@ -53,6 +54,10 @@ export function describeEvent(event: TicketEvent, members: Member[]): string {
       return 'closed the draft without filing it';
     case 'returned_to_queue':
       return 'moved it back to New';
+    case 'drafted':
+      return data.failed ? 'AI could not draft it; flagged for manual triage' : 'AI drafted the ticket';
+    case 'injection_suspected':
+      return 'flagged: the email seems to give the AI instructions, so the draft is marked low-confidence';
     case 'links_changed':
       return Number(data.count) === 1
         ? 'updated the links (1 link)'

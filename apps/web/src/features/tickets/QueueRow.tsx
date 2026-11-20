@@ -1,6 +1,6 @@
 import type { Ticket } from '@triago/shared';
 import { formatReceived, percent } from '../../lib/labels';
-import { CategoryLabel, PriorityBadge } from './TicketBadges';
+import { CategoryLabel, PriorityBadge, TriageBadge } from './TicketBadges';
 
 export function QueueRow({ ticket, active, onSelect }: { ticket: Ticket; active: boolean; onSelect: () => void }) {
   return (
@@ -13,6 +13,7 @@ export function QueueRow({ ticket, active, onSelect }: { ticket: Ticket; active:
       <div className="queue-meta">
         <CategoryLabel category={ticket.category} />
         <PriorityBadge priority={ticket.priority} />
+        <TriageBadge reason={ticket.manualTriage} />
         {ticket.aiConfidence !== null && <span className="queue-confidence">{percent(ticket.aiConfidence)} sure</span>}
       </div>
     </button>

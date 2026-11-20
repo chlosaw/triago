@@ -11,18 +11,21 @@ sender ──► MX: mx.sendgrid.net ──► SendGrid Inbound Parse ──(mul
 
 - **Authentication.** SendGrid cannot sign Inbound Parse requests, so the secret is part of the webhook URL. A wrong or missing secret gets the same 404 as any unknown path. The secret is redacted from request logs.
 - **Formats.** Both SendGrid formats work. Turn on **POST the raw, full MIME message**: the API then parses the whole message itself and handles every charset and encoding. Without it, the separate fields are decoded using SendGrid's `charsets` field.
-- **Retries.** SendGrid retries any 5xx response for up to 3 days, which also covers a host that is waking from sleep (for example a free Render instance). Problems a retry cannot fix get a `200` with `{"status": "dropped", "reason": ...}` so SendGrid stops:
+- **No email is lost.** Every email addressed to an organisation is saved as a ticket straight away, with a keyword draft; the AI draft follows as a background job. Mail the AI shouldn't see is still saved, flagged **Needs manual triage**:
 
-  | Reason         | When                                                         |
-  | -------------- | ------------------------------------------------------------ |
-  | `no_recipient` | None of the recipients is on `INBOUND_EMAIL_DOMAIN`          |
-  | `spam`         | SendGrid's spam check is on and the score is 5 or more       |
-  | `too_large`    | The message, attachments included, is over 5 MB              |
-  | `too_long`     | The text body is over 100,000 characters                     |
-  | `unreadable`   | The MIME message or sender address can't be parsed           |
-  | `rate_limited` | The organisation already received 30 emails in the last hour |
+  | Flag           | When                                                                                  |
+  | -------------- | ------------------------------------------------------------------------------------- |
+  | `rate_limited` | The organisation already received 30 emails this hour (saved without an AI call)      |
+  | `too_large`    | The message, attachments included, is over 30 MB (what could be read is saved)        |
+  | `unreadable`   | The MIME message can't be parsed (the start of the raw source is kept)                |
+  | `spam`         | SendGrid's spam score is 5 or more (filed under Closed, so it can be reopened)        |
+  | `ai_failed`    | The AI timed out, was rate-limited or gave an unusable answer (keyword draft is kept) |
 
-  Mail to an address that doesn't exist answers `{"status": "ignored"}`, so the endpoint never reveals which addresses are real. Redeliveries are recognised by `Message-ID` before any model call.
+  Bodies over 100,000 characters are cut, with a note, rather than refused. Only mail addressed to no organisation on `INBOUND_EMAIL_DOMAIN` is dropped (`{"status": "dropped", "reason": "no_recipient"}`).
+
+- **Retries.** SendGrid retries any 5xx response for up to 3 days, which also covers a host that is waking from sleep (for example a free Render instance). Because the AI runs after the response, the webhook answers in well under a second.
+
+  Mail to an address that doesn't exist answers `{"status": "ignored"}`, so the endpoint never reveals which addresses are real. Redeliveries are recognised by `Message-ID` before anything is saved, and the same `Message-ID` arriving through Gmail too becomes one ticket.
 
 - **Attachments** are skipped; the email's text becomes the ticket's first message.
 

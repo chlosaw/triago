@@ -74,6 +74,25 @@ export const NoteBody = z.object({
 });
 export type NoteBody = z.infer<typeof NoteBody>;
 
+/**
+ * Why a ticket needs a person to triage it by hand:
+ * - `drafting`: saved, the AI draft is still running in the background.
+ * - `ai_failed`: the AI could not draft it (timeout, rate limit, bad answer); keyword rules did.
+ * - `rate_limited`: more mail than the hourly AI budget; saved without asking the AI.
+ * - `too_large`: the message was over the size limit; saved as far as it could be read.
+ * - `unreadable`: the email could not be parsed; the raw text is kept.
+ * - `spam`: the mail provider scored it as spam; kept under Closed.
+ */
+export const MANUAL_TRIAGE_REASONS = [
+  'drafting',
+  'ai_failed',
+  'rate_limited',
+  'too_large',
+  'unreadable',
+  'spam'
+] as const;
+export type ManualTriageReason = (typeof MANUAL_TRIAGE_REASONS)[number];
+
 export interface Ticket {
   id: string;
   key: string;
@@ -87,6 +106,7 @@ export interface Ticket {
   assignee: { id: string; name: string } | null;
   links: TicketLink[];
   aiConfidence: number | null;
+  manualTriage: ManualTriageReason | null;
   receivedAt: string;
   triagedAt: string | null;
   updatedAt: string;
@@ -130,6 +150,8 @@ export interface Attachment {
 /** Largest file a ticket attachment may be, in bytes. */
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 export const MAX_ATTACHMENTS_PER_TICKET = 20;
+/** Total attachment storage per organisation. */
+export const MAX_ORG_ATTACHMENT_BYTES = 500 * 1024 * 1024;
 
 /** Text to check for spelling and grammar. */
 export const CorrectTextBody = z.object({ text: z.string().max(5000) });

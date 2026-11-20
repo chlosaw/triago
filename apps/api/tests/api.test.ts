@@ -118,6 +118,42 @@ describe('tenant isolation', () => {
     expect(still.body.ticket.title).toBe('Secret');
   });
 
+  it("refuses every write to another organisation's ticket", async () => {
+    const a = await signUp('Org A');
+    const b = await signUp('Org B');
+    const { body } = await request(app).post('/api/tickets').set(auth(a.token)).send({ title: 'Secret' }).expect(201);
+    const id = body.ticket.id;
+
+    await request(app).post(`/api/tickets/${id}/accept`).set(auth(b.token)).send({}).expect(404);
+    await request(app).post(`/api/tickets/${id}/dismiss`).set(auth(b.token)).expect(404);
+    await request(app).post(`/api/tickets/${id}/notes`).set(auth(b.token)).send({ body: 'hi' }).expect(404);
+    await request(app)
+      .patch(`/api/tickets/${id}`)
+      .set(auth(b.token))
+      .send({ links: [{ url: 'https://evil.example' }] })
+      .expect(404);
+    await request(app)
+      .post(`/api/tickets/${id}/attachments`)
+      .set(auth(b.token))
+      .set('Content-Type', 'application/octet-stream')
+      .set('X-Filename', 'x.txt')
+      .send(Buffer.from('x'))
+      .expect(404);
+    expect(await prisma.message.count({ where: { ticketId: id } })).toBe(0);
+    expect(await prisma.attachment.count({ where: { ticketId: id } })).toBe(0);
+  });
+
+  it("can't page or filter into another organisation", async () => {
+    const a = await signUp('Org A');
+    const b = await signUp('Org B');
+    const { body } = await request(app).post('/api/tickets').set(auth(a.token)).send({ title: 'Secret' }).expect(201);
+    const aUser = (await request(app).get('/api/auth/me').set(auth(a.token))).body.user.id;
+
+    await request(app).get(`/api/tickets?cursor=${body.ticket.id}`).set(auth(b.token)).expect(400);
+    const filtered = await request(app).get(`/api/tickets?assignee=${aUser}`).set(auth(b.token)).expect(200);
+    expect(filtered.body.tickets).toEqual([]);
+  });
+
   it('refuses to assign a ticket to someone outside the organisation', async () => {
     const a = await signUp('Org A');
     const b = await signUp('Org B');

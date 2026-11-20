@@ -44,6 +44,14 @@ const Env = z.object({
   GOOGLE_CLIENT_ID: optional(z.string().min(1)),
   GOOGLE_CLIENT_SECRET: optional(z.string().min(1)),
   GOOGLE_REDIRECT_URI: optional(z.url()),
+  // Encrypts Gmail refresh tokens at rest. Separate from JWT_SECRET so rotating one doesn't
+  // break the other. Generate with: openssl rand -base64 48. Without it, a key derived
+  // from JWT_SECRET is used (tokens saved that way still decrypt after you add this).
+  TOKEN_ENCRYPTION_KEY: optional(z.string().min(32, 'TOKEN_ENCRYPTION_KEY must be at least 32 characters')),
+  // Optional: outgoing email (password reset links) through SendGrid's mail send API.
+  // Without it, reset links are printed to the console in development and not sent at all in production.
+  SENDGRID_API_KEY: optional(z.string().min(1)),
+  MAIL_FROM: optional(z.email()),
   // Set to "false" to run an API instance that does not process background jobs.
   JOBS_ENABLED: z.enum(['true', 'false']).default('true')
 });
@@ -75,6 +83,8 @@ export const config = {
           redirectUri: env.GOOGLE_REDIRECT_URI ?? `${new URL(env.CLIENT_ORIGIN).origin}/api/gmail/callback`
         }
       : null,
+  tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
+  mail: env.SENDGRID_API_KEY && env.MAIL_FROM ? { apiKey: env.SENDGRID_API_KEY, from: env.MAIL_FROM } : null,
   jobsEnabled: env.JOBS_ENABLED === 'true' && env.NODE_ENV !== 'test',
   accessTokenTtlSeconds: 15 * 60,
   jwtIssuer: 'triago-api',

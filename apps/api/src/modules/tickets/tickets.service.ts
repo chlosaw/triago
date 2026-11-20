@@ -2,6 +2,7 @@ import {
   type AcceptTicketBody,
   type CreateTicketBody,
   type Category,
+  type ManualTriageReason,
   type Message,
   type PatchTicketBody,
   type Priority,
@@ -42,6 +43,7 @@ function toTicket(row: TicketRow): Ticket {
     assignee: row.assignee,
     links: Array.isArray(row.links) ? (row.links as unknown as TicketLink[]) : [],
     aiConfidence: row.aiConfidence,
+    manualTriage: row.manualTriage as ManualTriageReason | null,
     receivedAt: row.receivedAt.toISOString(),
     triagedAt: row.triagedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString()
@@ -61,6 +63,10 @@ export async function listTickets(
   orgId: string,
   options: { statuses: Status[]; sort: Sort; limit: number; cursor?: string; q?: string; assigneeId?: string }
 ): Promise<TicketPage> {
+  // The cursor must be one of this organisation's tickets; any other id is refused, not just ignored.
+  if (options.cursor && !(await prisma.ticket.count({ where: { orgId, id: options.cursor } }))) {
+    throw new HttpError(400, 'VALIDATION_FAILED', 'Invalid cursor.', { cursor: 'Unknown cursor' });
+  }
   const rows = await prisma.ticket.findMany({
     where: {
       orgId,
@@ -130,6 +136,8 @@ export interface NewTicket {
   requesterEmail?: string | null;
   aiConfidence?: number | null;
   externalId?: string | null;
+  messageId?: string | null;
+  manualTriage?: ManualTriageReason | null;
   receivedAt?: Date;
   triagedAt?: Date | null;
   /** The original email, stored as the ticket's first message. */
@@ -264,6 +272,56 @@ export async function dismissTicket(orgId: string, id: string, actorId: string):
     await tx.ticket.update({ where: { id }, data: { status: 'dismissed', triagedAt: new Date() } });
     await logEvent(tx, orgId, id, actorId, 'dismissed', {});
     return getTicket(orgId, id, tx);
+  });
+}
+
+/** Event types that mean a person has already worked on the ticket. */
+const HUMAN_EVENTS = ['field_changed', 'accepted', 'dismissed', 'returned_to_queue', 'links_changed'];
+
+/**
+ * Applies a background AI draft to an email ticket. The draft only replaces the
+ * keyword draft if nobody has touched the ticket meanwhile; a person's edits always win.
+ */
+export async function applyAiDraft(
+  orgId: string,
+  id: string,
+  draft: Pick<NewTicket, 'title' | 'summary' | 'category' | 'priority' | 'aiConfidence'> & {
+    classifier: string;
+    failed: boolean;
+    /** The email reads like an attempt to instruct the AI; logged so the agent looks closer. */
+    injectionSuspected?: boolean;
+  }
+): Promise<'applied' | 'kept_human_edits' | 'failed' | 'skipped'> {
+  return prisma.$transaction(async (tx) => {
+    await lockTicket(tx, orgId, id);
+    const ticket = await tx.ticket.findUniqueOrThrow({ where: { id }, select: { status: true, manualTriage: true } });
+    if (ticket.manualTriage !== 'drafting') return 'skipped';
+    if (draft.injectionSuspected) await logEvent(tx, orgId, id, null, 'injection_suspected', {});
+
+    if (draft.failed) {
+      await tx.ticket.update({ where: { id }, data: { manualTriage: 'ai_failed' } });
+      await logEvent(tx, orgId, id, null, 'drafted', { classifier: draft.classifier, failed: true });
+      return 'failed';
+    }
+
+    const touched = await tx.ticketEvent.count({ where: { orgId, ticketId: id, type: { in: HUMAN_EVENTS } } });
+    if (touched || ticket.status !== 'new') {
+      await tx.ticket.update({ where: { id }, data: { manualTriage: null } });
+      return 'kept_human_edits';
+    }
+    await tx.ticket.update({
+      where: { id },
+      data: {
+        title: draft.title,
+        summary: draft.summary,
+        category: draft.category,
+        priority: draft.priority,
+        aiConfidence: draft.aiConfidence,
+        manualTriage: null
+      }
+    });
+    await logEvent(tx, orgId, id, null, 'drafted', { classifier: draft.classifier });
+    return 'applied';
   });
 }
 

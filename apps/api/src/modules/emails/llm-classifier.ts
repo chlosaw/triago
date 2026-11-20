@@ -3,12 +3,21 @@ import { z } from 'zod';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
 import { classify, type Classification, type InboundEmail } from './classifier.js';
+import { prepareForModel } from './prepare.js';
 
 /** Which classifier produced a draft; recorded on the ticket's `created` event. */
 export type ClassifierName = 'groq' | 'keywords';
 
 export interface Draft extends Classification {
   classifier: ClassifierName;
+  /** Set when a model is configured but could not produce a draft, so keyword rules did. */
+  aiFailed?: true;
+}
+
+/** Who the call is for; goes in the usage log line, never the email itself. */
+export interface CallContext {
+  orgId?: string;
+  purpose?: string;
 }
 
 /** The answer the model must give. Zod checks it, because JSON mode guarantees JSON, not this shape. */
@@ -63,6 +72,35 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   choices: { message: { content: string | null }; finish_reason: string }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+}
+
+/**
+ * One log line per model call with tokens and time, for cost and speed tracking.
+ * Never includes the prompt or the answer.
+ */
+export function logUsage(
+  context: CallContext,
+  model: string,
+  startedAt: number,
+  outcome: 'ok' | 'unusable' | 'error',
+  usage?: ChatResponse['usage']
+) {
+  logger.info(
+    {
+      ai: 'call',
+      provider: 'groq',
+      model,
+      purpose: context.purpose ?? 'draft',
+      orgId: context.orgId,
+      outcome,
+      durationMs: Math.round(performance.now() - startedAt),
+      promptTokens: usage?.prompt_tokens,
+      completionTokens: usage?.completion_tokens,
+      totalTokens: usage?.total_tokens
+    },
+    'AI call'
+  );
 }
 
 /** The one call the classifier makes; tests pass a stand-in. */
@@ -115,19 +153,32 @@ const client = config.groqApiKey ? createGroqClient(config.groqApiKey) : null;
  * when no API key is set, the API fails after its retries, or the answer can't
  * be used, so a sync never fails because of the model.
  */
-export async function draftTicket(email: InboundEmail, groq: ChatClient | null = client): Promise<Draft> {
+export async function draftTicket(
+  email: InboundEmail,
+  groq: ChatClient | null = client,
+  context: CallContext = {}
+): Promise<Draft> {
   if (!groq) return { ...classify(email), classifier: 'keywords' };
 
+  const startedAt = performance.now();
   try {
-    const draft = await askModel(groq, email);
+    const { draft, usage } = await askModel(groq, email);
+    logUsage(context, config.classifierModel, startedAt, draft ? 'ok' : 'unusable', usage);
     if (draft) return { ...draft, classifier: 'groq' };
   } catch (error) {
+    logUsage(context, config.classifierModel, startedAt, 'error');
     logClassifierError(error);
   }
-  return { ...classify(email), classifier: 'keywords' };
+  return { ...classify(email), classifier: 'keywords', aiFailed: true };
 }
 
-async function askModel(groq: ChatClient, email: InboundEmail): Promise<Classification | null> {
+/** True when a model is configured, i.e. new mail should wait for an AI draft. */
+export const aiConfigured = () => client !== null;
+
+async function askModel(
+  groq: ChatClient,
+  email: InboundEmail
+): Promise<{ draft: Classification | null; usage?: ChatResponse['usage'] }> {
   const response = await groq.chat({
     model: config.classifierModel,
     temperature: 0,
@@ -138,7 +189,8 @@ async function askModel(groq: ChatClient, email: InboundEmail): Promise<Classifi
       {
         role: 'user',
         // JSON-encoded so nothing in the email can close the tag or pose as another field.
-        content: `<email>${JSON.stringify({ from: `${email.fromName} <${email.fromEmail}>`, subject: email.subject, body: email.body })}</email>`
+        // Only the trimmed body goes to the model: no quoted history, signature or footer.
+        content: `<email>${JSON.stringify({ from: `${email.fromName} <${email.fromEmail}>`, subject: email.subject, body: prepareForModel(email.body) })}</email>`
       }
     ]
   });
@@ -150,17 +202,20 @@ async function askModel(groq: ChatClient, email: InboundEmail): Promise<Classifi
       { classifier: 'groq', finishReason: choice?.finish_reason },
       'Model returned no usable draft; using keyword rules'
     );
-    return null;
+    return { draft: null, usage: response.usage };
   }
 
   const title = parsed.title.trim().slice(0, TITLE_MAX);
-  if (!title) return null;
+  if (!title) return { draft: null, usage: response.usage };
   return {
-    title,
-    summary: parsed.summary.trim().slice(0, SUMMARY_MAX),
-    category: parsed.category,
-    priority: parsed.priority,
-    confidence: Number.isFinite(parsed.confidence) ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5
+    draft: {
+      title,
+      summary: parsed.summary.trim().slice(0, SUMMARY_MAX),
+      category: parsed.category,
+      priority: parsed.priority,
+      confidence: Number.isFinite(parsed.confidence) ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5
+    },
+    usage: response.usage
   };
 }
 

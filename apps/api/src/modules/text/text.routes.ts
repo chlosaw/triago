@@ -16,5 +16,5 @@ export const textRouter = Router();
 
 textRouter.post('/correct', correctLimiter, async (req, res) => {
   const { text } = CorrectTextBody.parse(req.body);
-  res.json(await correctText(text));
+  res.json(await correctText(text, undefined, getAuth(req).orgId));
 });

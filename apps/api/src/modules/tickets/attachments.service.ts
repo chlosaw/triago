@@ -1,4 +1,4 @@
-import { MAX_ATTACHMENTS_PER_TICKET, type Attachment } from '@triago/shared';
+import { MAX_ATTACHMENTS_PER_TICKET, MAX_ORG_ATTACHMENT_BYTES, type Attachment } from '@triago/shared';
 import { prisma } from '../../lib/db.js';
 import { HttpError, notFound } from '../../lib/errors.js';
 import type { AuthContext } from '../../middleware/auth.js';
@@ -29,6 +29,15 @@ export async function addAttachment(
   if (count >= MAX_ATTACHMENTS_PER_TICKET) {
     throw new HttpError(409, 'TOO_MANY_ATTACHMENTS', `A ticket can have at most ${MAX_ATTACHMENTS_PER_TICKET} files.`);
   }
+  // One organisation can't fill the shared database with files.
+  const { _sum } = await prisma.attachment.aggregate({ where: { orgId: auth.orgId }, _sum: { size: true } });
+  if ((_sum.size ?? 0) + file.data.length > MAX_ORG_ATTACHMENT_BYTES) {
+    throw new HttpError(
+      409,
+      'STORAGE_FULL',
+      'Your organisation has used its 500 MB of file storage. Delete old files or tickets to make room.'
+    );
+  }
   const row = await prisma.attachment.create({
     data: {
       orgId: auth.orgId,
@@ -53,7 +62,15 @@ export async function getAttachmentFile(orgId: string, ticketId: string, id: str
   return row;
 }
 
-export async function deleteAttachment(orgId: string, ticketId: string, id: string): Promise<void> {
-  const { count } = await prisma.attachment.deleteMany({ where: { orgId, ticketId, id } });
-  if (!count) throw notFound('Attachment');
+/** The uploader or an admin may delete a file. */
+export async function deleteAttachment(auth: AuthContext, ticketId: string, id: string): Promise<void> {
+  const row = await prisma.attachment.findFirst({
+    where: { orgId: auth.orgId, ticketId, id },
+    select: { uploaderId: true }
+  });
+  if (!row) throw notFound('Attachment');
+  if (row.uploaderId !== auth.userId && auth.role !== 'admin') {
+    throw new HttpError(403, 'FORBIDDEN', 'Only the person who added this file or an admin can delete it.');
+  }
+  await prisma.attachment.delete({ where: { id } });
 }

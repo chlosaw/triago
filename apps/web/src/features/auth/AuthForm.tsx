@@ -108,7 +108,11 @@ export function AuthForm({ mode }: { mode: 'register' | 'login' }) {
           placeholder={isRegister ? 'At least 10 characters' : ''}
           {...field('password')}
           hint={
-            isRegister && (
+            !isRegister ? (
+              <Link to="/forgot-password" className="forgot-link">
+                Forgot password?
+              </Link>
+            ) : (
               <>
                 <div className="strength-row" aria-hidden>
                   {[0, 1, 2, 3].map((index) => (

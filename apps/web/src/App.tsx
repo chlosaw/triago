@@ -18,6 +18,8 @@ export function App() {
       <Routes>
         <Route path="/login" element={<AuthPage mode="login" />} />
         <Route path="/register" element={<AuthPage mode="register" />} />
+        <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />
+        <Route path="/reset-password" element={<AuthPage mode="reset" />} />
         <Route path="*" element={<Navigate to="/register" replace />} />
       </Routes>
     );
@@ -30,6 +32,8 @@ export function App() {
         <Route path="queue" element={<QueuePage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
+      {/* A reset link opened while signed in still works. */}
+      <Route path="/reset-password" element={<AuthPage mode="reset" />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

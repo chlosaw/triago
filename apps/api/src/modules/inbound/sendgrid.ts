@@ -11,14 +11,21 @@ import { InboundEmailPayload, slugFromAddress } from './inbound.service.js';
  * Raw mode is recommended: the MIME parser then handles every charset and encoding.
  */
 
-/** Large enough for a support email in raw mode; attachments push past it and are refused. */
-const MAX_FIELD_BYTES = 5 * 1024 * 1024;
-const MAX_TEXT_CHARS = 100_000;
+/**
+ * SendGrid posts at most 30 MB per email, attachments included, so read up to that:
+ * a big attachment must not cost us the email. Nginx allows 31 MB on this route.
+ */
+const MAX_FIELD_BYTES = 30 * 1024 * 1024;
+/** How much of an unreadable message's raw source is kept for a person to read. */
+const RAW_PREVIEW_CHARS = 20_000;
 
 export type Fields = Record<string, Buffer>;
 
-/** Why an email was not turned into a ticket; reported back with a 200 so SendGrid does not retry. */
-export type DropReason = 'too_large' | 'too_long' | 'no_recipient' | 'unreadable' | 'spam';
+/**
+ * Why an email was not turned into a ticket; reported back with a 200 so SendGrid does not retry.
+ * Only mail that isn't addressed to us is dropped. Everything else is kept (see intake.service.ts).
+ */
+export type DropReason = 'no_recipient';
 
 /**
  * Reads the form fields as raw bytes. busboy decodes as latin1, which maps each
@@ -53,18 +60,22 @@ export function readFields(req: Request): Promise<{ fields: Fields; truncated: b
   });
 }
 
-/** Turns SendGrid's fields into the payload the rest of the inbound pipeline takes. */
-export async function toPayload(fields: Fields): Promise<InboundEmailPayload | DropReason> {
+/**
+ * Turns SendGrid's fields into the payload the rest of the inbound pipeline takes.
+ * `truncated` means the form hit the size cap; the email is still kept, flagged as too large.
+ */
+export async function toPayload(fields: Fields, truncated = false): Promise<InboundEmailPayload | DropReason> {
   const charsets = parseJson<Record<string, string>>(fields.charsets) ?? {};
   const field = (name: string) => decode(fields[name], charsets[name]);
-
-  const spamScore = Number(field('spam_score'));
-  if (Number.isFinite(spamScore) && spamScore >= 5) return 'spam';
 
   // The SMTP envelope says which of our addresses the mail was actually delivered to.
   const envelope = parseJson<{ to?: string[]; from?: string }>(fields.envelope);
   const to = (envelope?.to ?? splitAddresses(field('to'))).find((address) => slugFromAddress(address) !== null);
   if (!to) return 'no_recipient';
+
+  const spamScore = Number(field('spam_score'));
+  const spam = Number.isFinite(spamScore) && spamScore >= 5;
+  const hold = spam ? 'spam' : truncated ? 'too_large' : undefined;
 
   let email: { fromName: string; fromEmail: string; subject: string; text: string; messageId?: string };
   if (fields.email) {
@@ -79,7 +90,7 @@ export async function toPayload(fields: Fields): Promise<InboundEmailPayload | D
         messageId: parsed.messageId
       };
     } catch {
-      return 'unreadable';
+      return unreadable(to, envelope?.from, fields.email.toString('utf8'));
     }
   } else {
     const from = parseFromHeader(field('from'));
@@ -92,17 +103,32 @@ export async function toPayload(fields: Fields): Promise<InboundEmailPayload | D
     };
   }
 
-  const text = email.text.trim();
-  if (text.length > MAX_TEXT_CHARS) return 'too_long';
-
   const result = InboundEmailPayload.safeParse({
     to,
-    from: { email: email.fromEmail, name: email.fromName },
-    subject: email.subject,
-    text,
-    messageId: email.messageId || undefined
+    from: { email: validEmail(email.fromEmail), name: email.fromName.slice(0, 200) },
+    subject: email.subject.slice(0, 998),
+    // Long bodies are cut when stored, not refused.
+    text: email.text.trim(),
+    messageId: email.messageId?.slice(0, 998) || undefined,
+    hold
   });
-  return result.success ? result.data : 'unreadable';
+  return result.success ? result.data : unreadable(to, envelope?.from, email.text);
+}
+
+const validEmail = (value: string | undefined) => {
+  const address = value?.trim() ?? '';
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) && address.length <= 320 ? address : '';
+};
+
+/** A message we could not parse is still kept: a placeholder ticket with the start of the raw source. */
+function unreadable(to: string, envelopeFrom: string | undefined, raw: string): InboundEmailPayload {
+  return {
+    to,
+    from: { email: validEmail(envelopeFrom), name: '' },
+    subject: '(unreadable email)',
+    text: `Triago could not read this email's format. The start of the original message follows.\n\n${raw.slice(0, RAW_PREVIEW_CHARS)}`,
+    hold: 'unreadable'
+  };
 }
 
 function decode(bytes: Buffer | undefined, charset = 'utf-8'): string {

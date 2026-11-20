@@ -1,10 +1,11 @@
 import { Brand } from '../components/Brand';
 import { SpaceBackground } from '../components/SpaceBackground';
 import { AuthForm } from '../features/auth/AuthForm';
+import { ForgotPasswordForm, ResetPasswordForm } from '../features/auth/PasswordResetForms';
 
 const STEPS = ['Create workspace', 'Import email', 'AI drafts', 'You approve'];
 
-export function AuthPage({ mode }: { mode: 'register' | 'login' }) {
+export function AuthPage({ mode }: { mode: 'register' | 'login' | 'forgot' | 'reset' }) {
   return (
     <div className="page-shell auth-space">
       <SpaceBackground />
@@ -31,7 +32,13 @@ export function AuthPage({ mode }: { mode: 'register' | 'login' }) {
         </div>
 
         <div className="register-panel">
-          <AuthForm mode={mode} />
+          {mode === 'forgot' ? (
+            <ForgotPasswordForm />
+          ) : mode === 'reset' ? (
+            <ResetPasswordForm />
+          ) : (
+            <AuthForm mode={mode} />
+          )}
         </div>
       </div>
     </div>

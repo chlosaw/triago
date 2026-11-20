@@ -8,7 +8,7 @@ import { prisma } from './lib/db.js';
 import { notFound } from './lib/errors.js';
 import { logger } from './lib/logger.js';
 import { errorHandler } from './middleware/error-handler.js';
-import { requireAuth } from './middleware/auth.js';
+import { requireMember } from './middleware/auth.js';
 import { limiter, noStore } from './middleware/security.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { emailsRouter } from './modules/emails/emails.routes.js';
@@ -18,6 +18,14 @@ import { orgRouter } from './modules/org/org.routes.js';
 import { statsRouter } from './modules/stats/stats.routes.js';
 import { textRouter } from './modules/text/text.routes.js';
 import { ticketsRouter } from './modules/tickets/tickets.routes.js';
+
+/**
+ * The path as it appears in request logs: no query string (search terms, OAuth codes,
+ * names and emails can be in it) and no inbound webhook secret.
+ */
+export function logUrl(url: string): string {
+  return url.split('?')[0]!.replace(/^(\/api\/inbound\/sendgrid\/)[^/]+/, '$1[redacted]');
+}
 
 export function createApp() {
   const app = express();
@@ -36,7 +44,7 @@ export function createApp() {
         req: (req: { id: unknown; method: string; url: string }) => ({
           id: req.id,
           method: req.method,
-          url: req.url.replace(/^(\/api\/inbound\/sendgrid\/)[^/?]+/, '$1[redacted]')
+          url: logUrl(req.url)
         }),
         res: (res: { statusCode: number }) => ({ statusCode: res.statusCode })
       }
@@ -67,11 +75,11 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRouter);
-  app.use('/api/tickets', requireAuth, ticketsRouter);
-  app.use('/api/emails', requireAuth, emailsRouter);
-  app.use('/api/org', requireAuth, orgRouter);
-  app.use('/api/stats', requireAuth, statsRouter);
-  app.use('/api/text', requireAuth, textRouter);
+  app.use('/api/tickets', requireMember, ticketsRouter);
+  app.use('/api/emails', requireMember, emailsRouter);
+  app.use('/api/org', requireMember, orgRouter);
+  app.use('/api/stats', requireMember, statsRouter);
+  app.use('/api/text', requireMember, textRouter);
   // The OAuth callback is public (Google redirects the browser); the other routes check auth themselves.
   app.use('/api/gmail', gmailRouter);
 

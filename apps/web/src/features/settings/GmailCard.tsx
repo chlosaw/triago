@@ -7,7 +7,7 @@ import { ErrorState } from '../../components/QueryState';
 
 /** Connect, show and disconnect the organisation's Gmail mailbox. */
 export function GmailCard({ org, readOnly }: { org: Organisation; readOnly: boolean }) {
-  const { connect, disconnect } = useGmailActions();
+  const { connect, disconnect, backfill } = useGmailActions();
   const [params, setParams] = useSearchParams();
   // Google sends the admin back to /settings?gmail=connected|error; show that once, then tidy the URL.
   const [outcome] = useState(() => ({ result: params.get('gmail'), message: params.get('message') }));
@@ -86,6 +86,34 @@ export function GmailCard({ org, readOnly }: { org: Organisation; readOnly: bool
               {connect.isPending ? 'Opening Google…' : 'Connect Gmail'}
             </button>
           )}
+        </div>
+      )}
+      {gmail.email && !readOnly && (
+        <div className="backfill-row">
+          <span className="mini-label">Import older mail</span>
+          <div className="gmail-actions">
+            {([30, 90, 365] as const).map((days) => (
+              <button
+                key={days}
+                type="button"
+                className="btn btn-secondary"
+                disabled={backfill.isPending}
+                onClick={() => backfill.mutate(days)}
+              >
+                Last {days === 365 ? 'year' : `${days} days`}
+              </button>
+            ))}
+          </div>
+          <span className="helper-line">
+            Runs in the background from the watched label; emails already imported are skipped. Each one gets an AI
+            draft, a few at a time.
+          </span>
+          {backfill.isSuccess && (
+            <div className="success-box" role="status">
+              Importing the last {backfill.data.days} days. New tickets appear in the queue as they come in.
+            </div>
+          )}
+          {backfill.error && <ErrorState message={backfill.error.message} />}
         </div>
       )}
       {gmail.available && readOnly && !gmail.email && (

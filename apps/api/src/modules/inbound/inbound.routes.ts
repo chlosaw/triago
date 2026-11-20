@@ -31,7 +31,7 @@ const requireSecret: RequestHandler = (req, _res, next) => {
  */
 const parseSendGrid: RequestHandler = async (req, res, next) => {
   const { fields, truncated } = await readFields(req);
-  const payload = truncated ? 'too_large' : await toPayload(fields);
+  const payload = await toPayload(fields, truncated);
   if (typeof payload === 'string') {
     req.log.info({ inbound: 'dropped', reason: payload }, 'Inbound email dropped');
     res.status(200).json({ status: 'dropped', reason: payload });
@@ -41,14 +41,18 @@ const parseSendGrid: RequestHandler = async (req, res, next) => {
   next();
 };
 
-// Anyone can email an address, and each email may call a paid model: cap it per organisation.
+// Anyone can email an address, and each email may call a paid model: cap the AI per organisation.
+// Over the cap the email is still saved, just without an AI draft, and flagged for a person.
 const perOrganisation = limiter({
   name: 'inbound-org',
   windowMinutes: 60,
   limit: 30,
+  enforceInTests: true,
   key: (req) => slugFromAddress((req.body as InboundEmailPayload).to) ?? undefined,
-  onLimit: (_req, res) => {
-    res.status(200).json({ status: 'dropped', reason: 'rate_limited' });
+  onLimit: (req, _res, next) => {
+    const payload = req.body as InboundEmailPayload;
+    payload.hold ??= 'rate_limited';
+    next();
   }
 });
 

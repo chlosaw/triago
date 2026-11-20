@@ -28,4 +28,7 @@ authRouter.post('/login', credentialsPerIp, credentialsPerAccount, controller.lo
 authRouter.post('/demo', demoLimiter, controller.demo);
 authRouter.post('/refresh', refreshLimiter, controller.refresh);
 authRouter.post('/logout', controller.logout);
+// Same budget as sign-in: each request sends an email, and guessing tokens must be hopeless.
+authRouter.post('/password/forgot', credentialsPerIp, credentialsPerAccount, controller.forgotPassword);
+authRouter.post('/password/reset', credentialsPerIp, controller.resetPassword);
 authRouter.get('/me', requireAuth, controller.me);

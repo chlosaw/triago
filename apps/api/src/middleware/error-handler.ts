@@ -20,9 +20,31 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
     res.status(status).json({ error: body });
     return;
   }
-  req.log.error({ err: error }, 'Unhandled error');
+  req.log.error({ err: safeError(error) }, 'Unhandled error');
   res.status(500).json({ error: { code: 'INTERNAL', message: 'Something went wrong.' } });
 };
+
+/**
+ * What gets logged for an unexpected error. Prisma's messages quote the query's
+ * arguments, which can include email bodies, so for those keep only the code,
+ * the model and the stack, never the message.
+ */
+export function safeError(error: unknown): unknown {
+  if (error instanceof Error && error.name.startsWith('PrismaClient')) {
+    const { code, meta } = error as Error & { code?: string; meta?: { modelName?: string; target?: unknown } };
+    return {
+      type: error.name,
+      code,
+      model: meta?.modelName,
+      target: meta?.target,
+      stack: error.stack
+        ?.split('\n')
+        .filter((line) => line.trimStart().startsWith('at '))
+        .join('\n')
+    };
+  }
+  return error;
+}
 
 const PARSER_ERRORS: Record<string, { status: number; code: string; message: string }> = {
   'entity.parse.failed': { status: 400, code: 'MALFORMED_BODY', message: 'The request body is not valid JSON.' },

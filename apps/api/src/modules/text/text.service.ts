@@ -2,7 +2,7 @@ import type { CorrectTextResult } from '@triago/shared';
 import { z } from 'zod';
 import { config } from '../../config.js';
 import { logger } from '../../lib/logger.js';
-import { createGroqClient, type ChatClient } from '../emails/llm-classifier.js';
+import { createGroqClient, logUsage, type ChatClient } from '../emails/llm-classifier.js';
 import { correctWithRules } from './autocorrect.js';
 
 const SYSTEM_PROMPT = `You are a careful copy editor for a support team's tickets.
@@ -17,10 +17,16 @@ const Answer = z.object({ text: z.string() });
 const client = config.groqApiKey ? createGroqClient(config.groqApiKey) : null;
 
 /** Corrects spelling and grammar with the model when one is configured, else with offline rules. */
-export async function correctText(text: string, groq: ChatClient | null = client): Promise<CorrectTextResult> {
+export async function correctText(
+  text: string,
+  groq: ChatClient | null = client,
+  orgId?: string
+): Promise<CorrectTextResult> {
   if (!text.trim()) return { text, changed: false, engine: 'rules' };
 
   if (groq) {
+    const startedAt = performance.now();
+    const context = { orgId, purpose: 'grammar' };
     try {
       const response = await groq.chat({
         model: config.classifierModel,
@@ -33,6 +39,13 @@ export async function correctText(text: string, groq: ChatClient | null = client
         ]
       });
       const choice = response.choices[0];
+      logUsage(
+        context,
+        config.classifierModel,
+        startedAt,
+        choice?.finish_reason === 'stop' ? 'ok' : 'unusable',
+        response.usage
+      );
       const parsed =
         choice?.finish_reason === 'stop' ? Answer.safeParse(JSON.parse(choice.message.content ?? '')) : null;
       // Reject answers that are empty or wildly different in length: the model rewrote instead of correcting.
@@ -42,6 +55,7 @@ export async function correctText(text: string, groq: ChatClient | null = client
       }
       logger.warn('Model returned no usable correction; using rules');
     } catch (error) {
+      logUsage(context, config.classifierModel, startedAt, 'error');
       logger.warn({ err: error }, 'Text correction model failed; using rules');
     }
   }

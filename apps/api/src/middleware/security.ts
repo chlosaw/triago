@@ -15,7 +15,8 @@ export function limiter({
   limit,
   key,
   name,
-  onLimit
+  onLimit,
+  enforceInTests = false
 }: {
   windowMinutes: number;
   limit: number;
@@ -25,13 +26,15 @@ export function limiter({
   name: string;
   /** Answer to send instead of a 429, e.g. for a webhook whose sender would retry. */
   onLimit?: RequestHandler;
+  /** Count requests in tests too (limits are otherwise off there), for limits whose behaviour is tested. */
+  enforceInTests?: boolean;
 }): RequestHandler {
   return rateLimit({
     windowMs: windowMinutes * 60 * 1000,
     limit,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    skip: (req) => config.env === 'test' || (key !== undefined && key(req) === undefined),
+    skip: (req) => (config.env === 'test' && !enforceInTests) || (key !== undefined && key(req) === undefined),
     keyGenerator: key ? (req) => `${name}:${key(req)}` : (req) => `${name}:${req.ip}`,
     handler: (req, res, next) => {
       req.log.warn({ security: 'rate_limited', limiter: name, ip: req.ip }, 'Rate limit hit');

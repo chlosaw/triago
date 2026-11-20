@@ -4,6 +4,9 @@ dist
 *.tsbuildinfo
 npm-debug.log*
 .DS_Store
+# Every env file holds secrets (neon deploy writes .env.local); only the example is shared.
 .env
+.env.*
+!.env.example
 apps/api/src/generated
 

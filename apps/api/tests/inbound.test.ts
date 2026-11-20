@@ -26,7 +26,11 @@ async function signUp() {
   return { token, address: org.body.org.inboundAddress as string };
 }
 
-const rawEmail = (to: string, messageId = '<abc123@harbor.dev>') =>
+const rawEmail = (
+  to: string,
+  messageId = '<abc123@harbor.dev>',
+  body = 'Our card was charged twice for invoice INV-2291. Please refund the duplicate.'
+) =>
   [
     'From: Grace Liu <grace@harbor.dev>',
     `To: ${to}`,
@@ -34,14 +38,14 @@ const rawEmail = (to: string, messageId = '<abc123@harbor.dev>') =>
     `Message-ID: ${messageId}`,
     'Content-Type: text/plain; charset=utf-8',
     '',
-    'Our card was charged twice for invoice INV-2291. Please refund the duplicate.'
+    body
   ].join('\r\n');
 
 /** Posts the form SendGrid sends with "POST the raw, full MIME message" enabled. */
-function deliverRaw(to: string, fields: Record<string, string> = {}, url = WEBHOOK) {
+function deliverRaw(to: string, fields: Record<string, string> = {}, url = WEBHOOK, email = rawEmail(to)) {
   const req = request(app)
     .post(url)
-    .field('email', rawEmail(to))
+    .field('email', email)
     .field('envelope', JSON.stringify({ to: [to], from: 'grace@harbor.dev' }))
     .field('charsets', JSON.stringify({ to: 'UTF-8', from: 'UTF-8', subject: 'UTF-8' }));
   for (const [name, value] of Object.entries(fields)) req.field(name, value);
@@ -62,7 +66,8 @@ describe('inbound email (SendGrid)', () => {
     const { token, address } = await signUp();
 
     const first = await deliverRaw(address).expect(201);
-    expect(first.body).toMatchObject({ status: 'created', classifier: 'keywords' });
+    // No AI is configured in tests, so the keyword draft is final and nothing waits for triage.
+    expect(first.body).toMatchObject({ status: 'created', manualTriage: null });
     expect(await queue(token)).toMatchObject([
       {
         title: 'Charged twice for October',
@@ -104,18 +109,81 @@ describe('inbound email (SendGrid)', () => {
     expect(await prisma.ticket.count()).toBe(0);
   });
 
-  it('drops mail SendGrid should not retry: unknown address, other domain, spam', async () => {
-    const { address } = await signUp();
+  it('drops only mail that is not addressed to an organisation', async () => {
+    await signUp();
     await deliverRaw('nobody1234@in.triago.test')
       .expect(200)
       .expect((res) => expect(res.body.status).toBe('ignored'));
     await deliverRaw('someone@example.com')
       .expect(200)
       .expect((res) => expect(res.body).toEqual({ status: 'dropped', reason: 'no_recipient' }));
-    await deliverRaw(address, { spam_score: '7.2' })
-      .expect(200)
-      .expect((res) => expect(res.body.reason).toBe('spam'));
     expect(await prisma.ticket.count()).toBe(0);
+  });
+});
+
+describe('inbound email is never lost', () => {
+  it('keeps spam, filed under Closed and flagged, instead of throwing it away', async () => {
+    const { address } = await signUp();
+    await deliverRaw(address, { spam_score: '7.2' })
+      .expect(201)
+      .expect((res) => expect(res.body).toMatchObject({ status: 'created', manualTriage: 'spam' }));
+    expect(await prisma.ticket.findFirst({ select: { status: true, manualTriage: true } })).toEqual({
+      status: 'dismissed',
+      manualTriage: 'spam'
+    });
+  });
+
+  it('saves mail over the hourly AI budget, flagged for manual triage', async () => {
+    const { address } = await signUp();
+    for (let i = 0; i < 30; i += 1) {
+      await deliverRaw(address, {}, WEBHOOK, rawEmail(address, `<m${i}@harbor.dev>`)).expect(201);
+    }
+    const over = await deliverRaw(address, {}, WEBHOOK, rawEmail(address, '<m30@harbor.dev>')).expect(201);
+    expect(over.body).toMatchObject({ status: 'created', manualTriage: 'rate_limited' });
+    expect(await prisma.ticket.count()).toBe(31);
+  });
+
+  it('keeps an email whose text is longer than the storage limit, cut with a note', async () => {
+    const { token, address } = await signUp();
+    const long = 'Refund please. '.repeat(8_000); // 120,000 characters
+    await deliverRaw(address, {}, WEBHOOK, rawEmail(address, '<long@harbor.dev>', long)).expect(201);
+
+    const [ticket] = await queue(token);
+    const detail = await request(app).get(`/api/tickets/${ticket!.id}`).set('Authorization', `Bearer ${token}`);
+    const body = detail.body.messages[0].body as string;
+    expect(body.length).toBeLessThan(long.length);
+    expect(body).toMatch(/cut off at 100,000 characters/);
+  });
+
+  it('keeps an email whose sender address is malformed', async () => {
+    const { token, address } = await signUp();
+    await request(app)
+      .post(WEBHOOK)
+      .field('from', 'not an address')
+      .field('to', address)
+      .field('subject', 'Help')
+      .field('text', 'Our export is broken.')
+      .field('envelope', JSON.stringify({ to: [address], from: '' }))
+      .expect(201);
+    expect(await queue(token)).toMatchObject([{ title: 'Help', requester: { email: null } }]);
+  });
+
+  it('recognises the same Message-ID across channels, so it is one ticket', async () => {
+    const { address } = await signUp();
+    await deliverRaw(address, {}, WEBHOOK, rawEmail(address, '<Shared-1@Harbor.dev>')).expect(201);
+    const orgId = (await prisma.organisation.findFirstOrThrow()).id;
+    const { storeEmail } = await import('../src/modules/emails/intake.service.js');
+    // The same email, now seen through Gmail: different channel id, same Message-ID.
+    const again = await storeEmail(orgId, {
+      externalId: 'gmail:abc',
+      messageId: 'shared-1@harbor.dev',
+      fromName: 'Grace',
+      fromEmail: 'grace@harbor.dev',
+      subject: 'Charged twice for October',
+      text: 'Same email'
+    });
+    expect(again).toEqual({ status: 'duplicate' });
+    expect(await prisma.ticket.count()).toBe(1);
   });
 });
 

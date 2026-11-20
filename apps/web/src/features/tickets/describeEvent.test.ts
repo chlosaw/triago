@@ -19,6 +19,15 @@ describe('activity descriptions', () => {
     expect(describeEvent(event('created', { source: 'manual' }), members)).toBe('created the ticket');
   });
 
+  it('describes the background AI draft and its outcomes', () => {
+    expect(describeEvent(event('created', { source: 'email' }), members)).toBe('imported the email');
+    expect(describeEvent(event('drafted', { classifier: 'groq' }), members)).toBe('AI drafted the ticket');
+    expect(describeEvent(event('drafted', { classifier: 'keywords', failed: true }), members)).toBe(
+      'AI could not draft it; flagged for manual triage'
+    );
+    expect(describeEvent(event('injection_suspected'), members)).toMatch(/give the AI instructions/);
+  });
+
   it('lists the corrections made when accepting a draft', () => {
     const accepted = event('accepted', { corrections: { priority: { from: 'medium', to: 'urgent' } } });
     expect(describeEvent(accepted, members)).toBe('accepted the draft with corrections: priority Medium → Urgent');

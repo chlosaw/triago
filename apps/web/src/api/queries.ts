@@ -53,7 +53,11 @@ export function useTicketPages(
   refetchInterval: number | false = false
 ) {
   return useInfiniteQuery({
-    refetchInterval,
+    // While any loaded ticket still waits for its AI draft, check back every few seconds.
+    refetchInterval: (query: { state: { data?: InfiniteData<TicketPage> } }) =>
+      query.state.data?.pages.some((page) => page.tickets.some((ticket) => ticket.manualTriage === 'drafting'))
+        ? 4_000
+        : refetchInterval,
     queryKey: ['tickets', statuses, sort, filter.q?.trim() ?? '', filter.assignee ?? null, filter.limit ?? 25],
     queryFn: ({ pageParam }) => api<TicketPage>(ticketsUrl(statuses, sort, pageParam, filter)),
     initialPageParam: null as string | null,
@@ -278,8 +282,19 @@ export function useGmailActions() {
     disconnect: useMutation({
       mutationFn: () => api<void>('/gmail', { method: 'DELETE' }),
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['org'] })
+    }),
+    backfill: useMutation({
+      mutationFn: (days: 30 | 90 | 365) =>
+        api<{ status: string; days: number }>('/gmail/backfill', { method: 'POST', body: { days } })
     })
   };
+}
+
+/** Deletes the whole organisation; the caller signs out afterwards. */
+export function useDeleteOrganisation() {
+  return useMutation({
+    mutationFn: (confirmName: string) => api<void>('/org', { method: 'DELETE', body: { confirmName } })
+  });
 }
 
 export function useUpdateSettings() {

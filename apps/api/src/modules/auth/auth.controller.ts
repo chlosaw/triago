@@ -1,9 +1,10 @@
-import { LoginBody, RegisterBody } from '@triago/shared';
+import { ForgotPasswordBody, LoginBody, RegisterBody, ResetPasswordBody } from '@triago/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import { config } from '../../config.js';
 import { HttpError } from '../../lib/errors.js';
 import { getAuth } from '../../middleware/auth.js';
 import * as auth from './auth.service.js';
+import * as passwordReset from './password-reset.service.js';
 
 const REFRESH_COOKIE = 'triago_rt';
 
@@ -55,13 +56,31 @@ export async function refresh(req: Request, res: Response) {
   sendSession(res, await auth.refresh(token));
 }
 
+export function clearSessionCookie(res: Response) {
+  res.clearCookie(REFRESH_COOKIE, { ...cookieOptions, maxAge: undefined });
+}
+
 export async function logout(req: Request, res: Response) {
   const token = refreshCookie(req);
   if (token) await auth.logout(token);
-  res.clearCookie(REFRESH_COOKIE, { ...cookieOptions, maxAge: undefined });
+  clearSessionCookie(res);
   res.status(204).end();
 }
 
 export async function me(req: Request, res: Response) {
   res.json(await auth.getProfile(getAuth(req)));
+}
+
+/** Always 202, whether or not the email has an account. */
+export async function forgotPassword(req: Request, res: Response) {
+  const { email } = ForgotPasswordBody.parse(req.body);
+  await passwordReset.requestReset(email);
+  res.status(202).json({ status: 'sent' });
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  const { token, password } = ResetPasswordBody.parse(req.body);
+  await passwordReset.resetPassword(token, password);
+  clearSessionCookie(res);
+  res.status(204).end();
 }

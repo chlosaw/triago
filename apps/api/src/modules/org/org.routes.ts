@@ -6,3 +6,4 @@ export const orgRouter = Router();
 
 orgRouter.get('/', controller.show);
 orgRouter.patch('/settings', requireRole('admin'), controller.updateSettings);
+orgRouter.delete('/', requireRole('admin'), controller.remove);
