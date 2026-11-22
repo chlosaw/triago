@@ -36,8 +36,8 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
-      # Optional: password reset emails.
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      # Optional: invitation and password reset emails (Resend).
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-}
     depends_on:
       db:

@@ -48,10 +48,11 @@ const Env = z.object({
   // break the other. Generate with: openssl rand -base64 48. Without it, a key derived
   // from JWT_SECRET is used (tokens saved that way still decrypt after you add this).
   TOKEN_ENCRYPTION_KEY: optional(z.string().min(32, 'TOKEN_ENCRYPTION_KEY must be at least 32 characters')),
-  // Optional: outgoing email (password reset links) through SendGrid's mail send API.
-  // Without it, reset links are printed to the console in development and not sent at all in production.
-  SENDGRID_API_KEY: optional(z.string().min(1)),
-  MAIL_FROM: optional(z.email()),
+  // Optional: outgoing email (invitations, password reset links) through Resend.
+  // MAIL_FROM must be on a domain verified in Resend, e.g. "Triago <no-reply@triago.bid>".
+  // Without these, emails are printed to the console in development and not sent at all in production.
+  RESEND_API_KEY: optional(z.string().min(1)),
+  MAIL_FROM: optional(z.string().trim().min(3)),
   // Set to "false" to run an API instance that does not process background jobs.
   JOBS_ENABLED: z.enum(['true', 'false']).default('true')
 });
@@ -84,7 +85,7 @@ export const config = {
         }
       : null,
   tokenEncryptionKey: env.TOKEN_ENCRYPTION_KEY,
-  mail: env.SENDGRID_API_KEY && env.MAIL_FROM ? { apiKey: env.SENDGRID_API_KEY, from: env.MAIL_FROM } : null,
+  mail: env.RESEND_API_KEY && env.MAIL_FROM ? { apiKey: env.RESEND_API_KEY, from: env.MAIL_FROM } : null,
   jobsEnabled: env.JOBS_ENABLED === 'true' && env.NODE_ENV !== 'test',
   accessTokenTtlSeconds: 15 * 60,
   jwtIssuer: 'triago-api',
