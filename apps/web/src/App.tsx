@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './features/auth/context';
 import { AppLayout } from './components/AppLayout';
-import { AuthPage } from './pages/AuthPage';
+import { AuthPage, LandingPage } from './pages/AuthPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { QueuePage } from './pages/QueuePage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -23,7 +23,12 @@ export function App() {
         <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />
         <Route path="/reset-password" element={<AuthPage mode="reset" />} />
         <Route path="/invite" element={<AuthPage mode="invite" />} />
-        <Route path="*" element={<Navigate to="/register" replace />} />
+        <Route path="/" element={<LandingPage />} />
+        {/* Links into the app (e.g. a ticket shared in chat) ask the visitor to sign in. */}
+        {['/tickets/*', '/queue', '/settings'].map((path) => (
+          <Route key={path} path={path} element={<Navigate to="/login" replace />} />
+        ))}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }

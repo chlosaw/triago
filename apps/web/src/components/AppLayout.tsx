@@ -172,7 +172,15 @@ export function AppLayout() {
             </div>
             <div className="sidebar-actions">
               <ThemeToggle />
-              <button type="button" className="btn btn-subtle" onClick={logout}>
+              <button
+                type="button"
+                className="btn btn-subtle"
+                onClick={() => {
+                  // Land on the homepage, not the sign-in form, after signing out.
+                  navigate('/', { replace: true });
+                  void logout();
+                }}
+              >
                 Sign out
               </button>
             </div>
