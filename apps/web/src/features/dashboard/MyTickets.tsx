@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { useTicketPages } from '../../api/queries';
 import { Card } from '../../components/Card';
 import { QueryState } from '../../components/QueryState';
-import { displayStatus, formatReceived, STATUS_COLUMNS } from '../../lib/labels';
-import { PriorityBadge, TriageBadge } from '../tickets/TicketBadges';
+import { displayStatus, formatReceived, priorityLabel, STATUS_COLUMNS } from '../../lib/labels';
+import { CategoryIcon, PriorityIcon } from '../../components/Icons';
+import { TriageBadge } from '../tickets/TicketBadges';
 import { StatusSelect } from '../tickets/StatusSelect';
 
 /** Closed tickets are folded away after this many, so the list stays about open work. */
@@ -25,7 +26,9 @@ export function MyTickets() {
         empty={
           <>
             <div className="queue-empty-title">Nothing assigned to you</div>
-            Use <strong>+ Create</strong> to add a ticket, or pick one up in the Queue.
+            <span>
+              Use <strong>+ Create</strong> to add a ticket, or pick one up in the Queue.
+            </span>
           </>
         }
       >
@@ -79,16 +82,17 @@ function TicketList({ tickets }: { tickets: Ticket[] }) {
     <ul className="my-list">
       {tickets.map((ticket) => (
         <li key={ticket.id} className="my-row">
-          <span className="ticket-key">{ticket.key}</span>
-          <Link
-            className="my-title"
-            to={`/queue?status=${displayStatus(ticket.status)}&ticket=${ticket.id}`}
-            title={ticket.title}
-          >
+          <span className="my-key">
+            <CategoryIcon category={ticket.category} />
+            <span className="ticket-key">{ticket.key}</span>
+          </span>
+          <Link className="my-title" to={`/tickets/${ticket.id}`} title={ticket.title}>
             {ticket.title}
           </Link>
           <TriageBadge reason={ticket.manualTriage} />
-          <PriorityBadge priority={ticket.priority} />
+          <span title={priorityLabel(ticket.priority)}>
+            <PriorityIcon priority={ticket.priority} />
+          </span>
           <StatusSelect ticket={ticket} />
           <span className="my-time">{formatReceived(ticket.receivedAt)}</span>
         </li>

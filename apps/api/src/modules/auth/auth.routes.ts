@@ -32,3 +32,7 @@ authRouter.post('/logout', controller.logout);
 authRouter.post('/password/forgot', credentialsPerIp, credentialsPerAccount, controller.forgotPassword);
 authRouter.post('/password/reset', credentialsPerIp, controller.resetPassword);
 authRouter.get('/me', requireAuth, controller.me);
+authRouter.post('/switch-org', requireAuth, controller.switchOrganisation);
+// Invitation links. Accepting can check a password, so it shares the sign-in budget.
+authRouter.get('/invitations/:token', credentialsPerIp, controller.previewInvitation);
+authRouter.post('/invitations/accept', credentialsPerIp, controller.acceptInvitation);

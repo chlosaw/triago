@@ -76,7 +76,7 @@ export function QueuePage() {
       <aside className="queue-list-panel">
         <div className="queue-toolbar">
           <div className="queue-header-row">
-            <h2>Queue</h2>
+            <h2>Triage queue</h2>
             {gmailEmail && (
               <span className="watch-flag" title={`Watching ${gmailEmail}`}>
                 #{label}

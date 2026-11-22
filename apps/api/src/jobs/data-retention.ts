@@ -11,7 +11,12 @@ const REVOKED_TOKEN_DAYS = 30;
  * (`settings.retentionDays`, 0 = keep), and session tokens nobody can use any more.
  * Deleting a ticket also deletes its emails, notes, events and files.
  */
-export async function applyRetention(): Promise<{ tickets: number; tokens: number; resetLinks: number }> {
+export async function applyRetention(): Promise<{
+  tickets: number;
+  tokens: number;
+  resetLinks: number;
+  invitations: number;
+}> {
   const tickets = await prisma.$executeRaw`
     delete from tickets t
      using organisations o
@@ -28,6 +33,10 @@ export async function applyRetention(): Promise<{ tickets: number; tokens: numbe
   const resetLinks = await prisma.$executeRaw`
     delete from password_reset_tokens where expires_at < now() - interval '1 day'`;
 
-  logger.info({ tickets, tokens, resetLinks }, 'Applied data retention');
-  return { tickets, tokens, resetLinks };
+  // Used or expired invitations hold an email address and nothing else useful.
+  const invitations = await prisma.$executeRaw`
+    delete from invitations where expires_at < now() - interval '1 day' or accepted_at < now() - interval '30 days'`;
+
+  logger.info({ tickets, tokens, resetLinks, invitations }, 'Applied data retention');
+  return { tickets, tokens, resetLinks, invitations };
 }

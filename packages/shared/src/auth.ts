@@ -34,4 +34,6 @@ export interface Profile {
   user: { id: string; name: string; email: string };
   org: { id: string; name: string; isDemo: boolean };
   role: Role;
+  /** Every organisation this person belongs to, for the switcher. */
+  orgs: { id: string; name: string; role: Role }[];
 }

@@ -41,7 +41,8 @@ Open http://localhost:8080 and click **Try the demo, no sign-up**.
 - Spelling and grammar fixes for ticket text (AI when configured, built-in rules otherwise)
 - Search by title, summary and requester
 - Activity log and internal notes
-- Organisations with admin and agent roles
+- Teams: invite teammates by email as admins or agents, change roles, remove members; one person can belong to several organisations
+- Light and dark theme
 - Dashboard with your tickets and team statistics
 - Demo sandbox, no sign-up needed
 

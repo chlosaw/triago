@@ -22,5 +22,6 @@ const StatsQuery = z.object({
 
 export async function show(req: Request, res: Response) {
   const { tz, range } = StatsQuery.parse(req.query);
-  res.json(await getStats(getAuth(req).orgId, tz, range));
+  const auth = getAuth(req);
+  res.json(await getStats(auth.orgId, tz, range, auth.userId));
 }

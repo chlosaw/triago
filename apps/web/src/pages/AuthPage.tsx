@@ -1,13 +1,14 @@
 import { Brand } from '../components/Brand';
 import { SpaceBackground } from '../components/SpaceBackground';
 import { AuthForm } from '../features/auth/AuthForm';
+import { InviteForm } from '../features/auth/InviteForm';
 import { ForgotPasswordForm, ResetPasswordForm } from '../features/auth/PasswordResetForms';
 
 const STEPS = ['Create workspace', 'Import email', 'AI drafts', 'You approve'];
 
-export function AuthPage({ mode }: { mode: 'register' | 'login' | 'forgot' | 'reset' }) {
+export function AuthPage({ mode }: { mode: 'register' | 'login' | 'forgot' | 'reset' | 'invite' }) {
   return (
-    <div className="page-shell auth-space">
+    <div className="page-shell auth-space" data-theme="dark">
       <SpaceBackground />
       <div className="register-shell">
         <div className="register-copy">
@@ -32,7 +33,9 @@ export function AuthPage({ mode }: { mode: 'register' | 'login' | 'forgot' | 're
         </div>
 
         <div className="register-panel">
-          {mode === 'forgot' ? (
+          {mode === 'invite' ? (
+            <InviteForm />
+          ) : mode === 'forgot' ? (
             <ForgotPasswordForm />
           ) : mode === 'reset' ? (
             <ResetPasswordForm />

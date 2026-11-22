@@ -8,6 +8,8 @@ import {
 } from '@tanstack/react-query';
 import type {
   Attachment,
+  Invitation,
+  Role,
   Category,
   CorrectTextResult,
   CreateTicketBody,
@@ -286,6 +288,46 @@ export function useGmailActions() {
     backfill: useMutation({
       mutationFn: (days: 30 | 90 | 365) =>
         api<{ status: string; days: number }>('/gmail/backfill', { method: 'POST', body: { days } })
+    })
+  };
+}
+
+/** Pending invitations (admins only). */
+export function useInvitations(enabled: boolean) {
+  return useQuery({
+    queryKey: ['invitations'],
+    queryFn: () => api<{ invitations: Invitation[] }>('/org/invitations').then((data) => data.invitations),
+    enabled
+  });
+}
+
+/** Invite, revoke, change roles and remove members. Every change refreshes the member list. */
+export function useTeamActions() {
+  const queryClient = useQueryClient();
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['invitations'] }),
+      queryClient.invalidateQueries({ queryKey: ['org'] })
+    ]);
+  return {
+    invite: useMutation({
+      mutationFn: (body: { email: string; role: Role }) =>
+        api<{ invitation: Invitation }>('/org/invitations', { method: 'POST', body }),
+      onSuccess: refresh
+    }),
+    revoke: useMutation({
+      mutationFn: (id: string) => api<void>(`/org/invitations/${id}`, { method: 'DELETE' }),
+      onSuccess: refresh
+    }),
+    setRole: useMutation({
+      mutationFn: ({ userId, role }: { userId: string; role: Role }) =>
+        api<void>(`/org/members/${userId}`, { method: 'PATCH', body: { role } }),
+      onSuccess: refresh
+    }),
+    remove: useMutation({
+      mutationFn: (userId: string) => api<void>(`/org/members/${userId}`, { method: 'DELETE' }),
+      // Unassigned tickets change too.
+      onSuccess: () => Promise.all([refresh(), queryClient.invalidateQueries({ queryKey: ['tickets'] })])
     })
   };
 }

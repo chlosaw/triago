@@ -9,9 +9,11 @@ import {
   type TicketLink
 } from '@triago/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState, type DragEvent, type FormEvent } from 'react';
+import { useId, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { uploadAttachment, useOrg, useTicketActions } from '../../api/queries';
+import { Avatar, CategoryIcon, PriorityIcon } from '../../components/Icons';
 import { Modal } from '../../components/Modal';
+import { RichTextEditor } from '../../components/RichTextEditor';
 import { CATEGORY_OPTIONS, formatBytes, PRIORITY_OPTIONS, STATUS_OPTIONS } from '../../lib/labels';
 import { useProfile } from '../auth/context';
 import { GrammarButton } from './GrammarButton';
@@ -25,7 +27,9 @@ export function CreateTicketDialog({
   onClose: () => void;
   onCreated?: (ticket: Ticket) => void;
 }) {
-  const me = useProfile().user.id;
+  const profile = useProfile();
+  const me = profile.user.id;
+  const orgName = profile.org.name;
   const members = useOrg().data?.members ?? [];
   const sortedMembers = [...members].sort(
     (a, b) => Number(b.id === me) - Number(a.id === me) || a.name.localeCompare(b.name)
@@ -49,6 +53,7 @@ export function CreateTicketDialog({
   // Set once the ticket exists, so a retry after a failed upload doesn't create a second ticket.
   const [created, setCreated] = useState<Ticket | null>(null);
   const busy = create.isPending || uploading !== null;
+  const assigneeName = members.find((m) => m.id === assigneeId)?.name ?? null;
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -124,112 +129,13 @@ export function CreateTicketDialog({
   return (
     <Modal title="Create ticket" onClose={busy ? () => {} : onClose} className="create-modal">
       <form className="modal-form" onSubmit={submit} noValidate>
-        <div className="modal-body">
-          <p className="modal-note">
-            Required fields are marked with an asterisk <span aria-hidden="true">*</span>
-          </p>
+        <div className="modal-body jira-form">
+          <FormRow label="Project">
+            <span className="form-static">{orgName}</span>
+          </FormRow>
 
-          <div className="form-field">
-            <label className="form-label" htmlFor={`${id}-title`}>
-              Title <span className="required">*</span>
-            </label>
-            <input
-              id={`${id}-title`}
-              className="input"
-              value={title}
-              maxLength={200}
-              autoFocus
-              spellCheck
-              aria-invalid={errors.title ? true : undefined}
-              onChange={(event) => setTitle(event.target.value)}
-            />
-            <GrammarButton value={title} onChange={setTitle} />
-            {errors.title && <span className="field-error">{errors.title}</span>}
-          </div>
-
-          <div className="form-field">
-            <label className="form-label" htmlFor={`${id}-summary`}>
-              Description
-            </label>
-            <textarea
-              id={`${id}-summary`}
-              className="input textarea-input modal-textarea"
-              value={summary}
-              maxLength={5000}
-              spellCheck
-              placeholder="What happened, what's expected, and any steps to reproduce."
-              aria-invalid={errors.summary ? true : undefined}
-              onChange={(event) => setSummary(event.target.value)}
-            />
-            <GrammarButton value={summary} onChange={setSummary} />
-            {errors.summary && <span className="field-error">{errors.summary}</span>}
-          </div>
-
-          <div className="form-grid">
-            <div className="form-field">
-              <label className="form-label" htmlFor={`${id}-assignee`}>
-                Assignee
-              </label>
-              <select
-                id={`${id}-assignee`}
-                className="input"
-                value={assigneeId}
-                onChange={(event) => setAssigneeId(event.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {sortedMembers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.id === me ? `${member.name} (me)` : member.name}
-                  </option>
-                ))}
-              </select>
-              {assigneeId !== me && (
-                <button type="button" className="link-btn align-start" onClick={() => setAssigneeId(me)}>
-                  Assign to me
-                </button>
-              )}
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor={`${id}-priority`}>
-                Urgency
-              </label>
-              <select
-                id={`${id}-priority`}
-                className="input"
-                value={priority}
-                onChange={(event) => setPriority(event.target.value as Priority)}
-              >
-                {PRIORITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor={`${id}-status`}>
-                Status
-              </label>
-              <select
-                id={`${id}-status`}
-                className="input"
-                value={status}
-                onChange={(event) => setStatus(event.target.value as SettableStatus)}
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-field">
-              <label className="form-label" htmlFor={`${id}-category`}>
-                Type
-              </label>
+          <FormRow label="Type" htmlFor={`${id}-category`}>
+            <IconSelect icon={<CategoryIcon category={category} />}>
               <select
                 id={`${id}-category`}
                 className="input"
@@ -242,13 +148,117 @@ export function CreateTicketDialog({
                   </option>
                 ))}
               </select>
-            </div>
-          </div>
+            </IconSelect>
+          </FormRow>
 
-          <div className="form-field">
-            <span className="form-label" id={`${id}-files-label`}>
-              Attachments
+          <FormRow label="Summary" required htmlFor={`${id}-title`}>
+            <input
+              id={`${id}-title`}
+              className="input"
+              value={title}
+              maxLength={200}
+              autoFocus
+              spellCheck
+              aria-invalid={errors.title ? true : undefined}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <span className="form-help">A short title, e.g. “CSV export fails for invoices over 1,000 rows”.</span>
+            <GrammarButton value={title} onChange={setTitle} />
+            {errors.title && <span className="field-error">{errors.title}</span>}
+          </FormRow>
+
+          <FormRow label="Priority" htmlFor={`${id}-priority`}>
+            <div className="field-inline">
+              <IconSelect icon={<PriorityIcon priority={priority} />} narrow>
+                <select
+                  id={`${id}-priority`}
+                  className="input"
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value as Priority)}
+                >
+                  {PRIORITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </IconSelect>
+              <span
+                className="help-dot"
+                tabIndex={0}
+                role="img"
+                aria-label="Priority help"
+                title="How urgent is it for the customer?"
+              >
+                ?
+              </span>
+            </div>
+            <ul className="form-help priority-help">
+              <li>Urgent – many customers blocked, or data at risk</li>
+              <li>High – very urgent task; one customer blocked</li>
+              <li>Medium – normal activity</li>
+              <li>Low – long activity; can wait</li>
+            </ul>
+          </FormRow>
+
+          <FormRow label="Assignee" htmlFor={`${id}-assignee`}>
+            <div className="field-inline">
+              <IconSelect
+                icon={
+                  assigneeName ? <Avatar name={assigneeName} size={20} /> : <span className="avatar avatar-empty" />
+                }
+              >
+                <select
+                  id={`${id}-assignee`}
+                  className="input"
+                  value={assigneeId}
+                  onChange={(event) => setAssigneeId(event.target.value)}
+                >
+                  <option value="">Unassigned</option>
+                  {sortedMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.id === me ? `${member.name} (me)` : member.name}
+                    </option>
+                  ))}
+                </select>
+              </IconSelect>
+              {assigneeId !== me && (
+                <button type="button" className="link-btn link-blue" onClick={() => setAssigneeId(me)}>
+                  Assign to me
+                </button>
+              )}
+            </div>
+          </FormRow>
+
+          <FormRow label="Status" htmlFor={`${id}-status`}>
+            <select
+              id={`${id}-status`}
+              className="input input-narrow"
+              value={status}
+              onChange={(event) => setStatus(event.target.value as SettableStatus)}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </FormRow>
+
+          <FormRow label="Description" labelId={`${id}-summary-label`}>
+            <RichTextEditor
+              value={summary}
+              onChange={setSummary}
+              labelledBy={`${id}-summary-label`}
+              placeholder="What happened, what's expected, and the steps to reproduce."
+            />
+            <span className="form-help">
+              Describe the problem and how to reproduce it. <GrammarButton value={summary} onChange={setSummary} />
             </span>
+            {errors.summary && <span className="field-error">{errors.summary}</span>}
+          </FormRow>
+
+          <FormRow label="Attachments" labelId={`${id}-files-label`}>
             <div
               className={`drop-zone ${dragging ? 'is-dragging' : ''}`}
               onDragOver={(event) => {
@@ -259,7 +269,7 @@ export function CreateTicketDialog({
               onDrop={onDrop}
             >
               <span>Drop files here or</span>
-              <button type="button" className="link-btn" onClick={() => fileInput.current?.click()}>
+              <button type="button" className="link-btn link-blue" onClick={() => fileInput.current?.click()}>
                 browse
               </button>
               <span className="drop-hint">Up to 5 MB each</span>
@@ -303,29 +313,17 @@ export function CreateTicketDialog({
                 {errors.files}
               </span>
             )}
-          </div>
+          </FormRow>
 
-          <div className="form-field">
-            <span className="form-label">Links</span>
+          <FormRow label="Links">
             <LinksEditor links={links} onChange={setLinks} />
             {errors.links && <span className="field-error">{errors.links}</span>}
-          </div>
+          </FormRow>
 
           {create.error && <div className="alert-box">{create.error.message}</div>}
         </div>
 
-        <footer className="modal-footer">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              if (created) onCreated?.(created);
-              onClose();
-            }}
-            disabled={busy}
-          >
-            {created ? 'Close' : 'Cancel'}
-          </button>
+        <footer className="modal-footer jira-footer">
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {create.isPending
               ? 'Creating…'
@@ -335,8 +333,69 @@ export function CreateTicketDialog({
                   ? 'Retry upload'
                   : 'Create'}
           </button>
+          <button
+            type="button"
+            className="link-btn link-blue footer-cancel"
+            onClick={() => {
+              if (created) onCreated?.(created);
+              onClose();
+            }}
+            disabled={busy}
+          >
+            {created ? 'Close' : 'Cancel'}
+          </button>
         </footer>
       </form>
     </Modal>
+  );
+}
+
+/** One row of a Jira-style form: the label on the left, the field on the right. */
+function FormRow({
+  label,
+  htmlFor,
+  labelId,
+  required,
+  children
+}: {
+  label: string;
+  htmlFor?: string;
+  labelId?: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
+  const content = (
+    <>
+      {label}
+      {required && (
+        <span className="required" aria-hidden="true">
+          *
+        </span>
+      )}
+    </>
+  );
+  return (
+    <div className="form-row">
+      {htmlFor ? (
+        <label className="form-row-label" htmlFor={htmlFor} id={labelId}>
+          {content}
+        </label>
+      ) : (
+        <span className="form-row-label" id={labelId}>
+          {content}
+        </span>
+      )}
+      <div className="form-row-field">{children}</div>
+    </div>
+  );
+}
+
+/** A native select with an icon (type, priority, avatar) shown inside it, before the text. */
+function IconSelect({ icon, narrow, children }: { icon: ReactNode; narrow?: boolean; children: ReactNode }) {
+  return (
+    <span className={`icon-select ${narrow ? 'is-narrow' : ''}`}>
+      <span className="icon-select-icon">{icon}</span>
+      {children}
+    </span>
   );
 }

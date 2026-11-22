@@ -30,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const signIn = async (path: string, body?: unknown) => {
       const { accessToken } = await api<{ accessToken: string }>(path, { method: 'POST', body });
       setAccessToken(accessToken);
+      // Another organisation's data must never show under this one, even for a moment.
+      queryClient.clear();
       await loadProfile();
     };
     return {
@@ -37,12 +39,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: (email, password) => signIn('/auth/login', { email, password }),
       register: (input) => signIn('/auth/register', input),
       startDemo: () => signIn('/auth/demo'),
+      acceptInvite: (input) => signIn('/auth/invitations/accept', input),
+      switchOrg: (orgId) => signIn('/auth/switch-org', { orgId }),
       logout: async () => {
         await api('/auth/logout', { method: 'POST' }).catch(() => {});
         signedOut();
       }
     };
-  }, [state, loadProfile, signedOut]);
+  }, [state, loadProfile, signedOut, queryClient]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -81,6 +81,7 @@ model Organisation {
   tickets       Ticket[]
   refreshTokens RefreshToken[]
   gmail         GmailConnection?
+  invitations   Invitation[]
 
   @@map("organisations")
 }
@@ -96,11 +97,13 @@ model User {
   memberships         Membership[]
   refreshTokens       RefreshToken[]
   assignedTickets     Ticket[]             @relation("assignee")
+  createdTickets      Ticket[]             @relation("createdBy")
   messages            Message[]
   events              TicketEvent[]
   attachments         Attachment[]
   gmailConnections    GmailConnection[]
   passwordResetTokens PasswordResetToken[]
+  invitations         Invitation[]
 
   @@map("users")
 }
@@ -152,6 +155,8 @@ model Ticket {
   requesterEmail String?        @map("requester_email") @db.Citext
   /// Membership in the same organisation is checked by the service.
   assigneeId     String?        @map("assignee_id") @db.Uuid
+  /// The member who created a manual ticket (its reporter); null for email tickets.
+  createdById    String?        @map("created_by_id") @db.Uuid
   aiConfidence   Float?         @map("ai_confidence")
   /// Provider message id, so a mailbox sync never imports the same email twice.
   externalId     String?        @map("external_id")
@@ -170,6 +175,7 @@ model Ticket {
 
   org         Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   assignee    User?         @relation("assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy   User?         @relation("createdBy", fields: [createdById], references: [id], onDelete: SetNull)
   messages    Message[]
   events      TicketEvent[]
   attachments Attachment[]
@@ -265,4 +271,23 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+/// An emailed invitation to join an organisation. Single use; only a hash of the token is stored.
+model Invitation {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String     @map("org_id") @db.Uuid
+  email       String     @db.Citext
+  role        MemberRole @default(agent)
+  tokenHash   String     @unique @map("token_hash")
+  invitedById String?    @map("invited_by_id") @db.Uuid
+  expiresAt   DateTime   @map("expires_at") @db.Timestamptz
+  acceptedAt  DateTime?  @map("accepted_at") @db.Timestamptz
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  org       Organisation @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invitedBy User?        @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([orgId, email])
+  @@map("invitations")
 }

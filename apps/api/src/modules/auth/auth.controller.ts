@@ -1,4 +1,11 @@
-import { ForgotPasswordBody, LoginBody, RegisterBody, ResetPasswordBody } from '@triago/shared';
+import {
+  AcceptInviteBody,
+  ForgotPasswordBody,
+  LoginBody,
+  RegisterBody,
+  ResetPasswordBody,
+  SwitchOrgBody
+} from '@triago/shared';
 import type { CookieOptions, Request, Response } from 'express';
 import { config } from '../../config.js';
 import { HttpError } from '../../lib/errors.js';
@@ -83,4 +90,21 @@ export async function resetPassword(req: Request, res: Response) {
   await passwordReset.resetPassword(token, password);
   clearSessionCookie(res);
   res.status(204).end();
+}
+
+export async function previewInvitation(req: Request, res: Response) {
+  res.json(await auth.previewInvitation(String(req.params.token ?? '')));
+}
+
+export async function acceptInvitation(req: Request, res: Response) {
+  sendSession(res, await auth.acceptInvitation(AcceptInviteBody.parse(req.body)));
+}
+
+/** Moves the session to another of the user's organisations; the old session ends. */
+export async function switchOrganisation(req: Request, res: Response) {
+  const { orgId } = SwitchOrgBody.parse(req.body);
+  const session = await auth.switchOrganisation(getAuth(req), orgId);
+  const old = refreshCookie(req);
+  if (old) await auth.logout(old);
+  sendSession(res, session);
 }

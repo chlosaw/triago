@@ -24,7 +24,8 @@ import { toMessage } from './notes.service.js';
 
 const ticketInclude = {
   org: { select: { ticketPrefix: true } },
-  assignee: { select: { id: true, name: true } }
+  assignee: { select: { id: true, name: true } },
+  createdBy: { select: { name: true, email: true } }
 } satisfies Prisma.TicketInclude;
 
 type TicketRow = Prisma.TicketGetPayload<{ include: typeof ticketInclude }>;
@@ -40,6 +41,10 @@ function toTicket(row: TicketRow): Ticket {
     status: row.status,
     source: row.source,
     requester: { name: row.requesterName, email: row.requesterEmail },
+    reporter:
+      row.source === 'email'
+        ? { name: row.requesterName || row.requesterEmail || 'Unknown sender', email: row.requesterEmail }
+        : row.createdBy,
     assignee: row.assignee,
     links: Array.isArray(row.links) ? (row.links as unknown as TicketLink[]) : [],
     aiConfidence: row.aiConfidence,
@@ -130,6 +135,7 @@ export interface NewTicket {
   priority?: Priority;
   status?: Status;
   assigneeId?: string | null;
+  createdById?: string | null;
   links?: TicketLink[];
   source: Source;
   requesterName?: string;
@@ -196,7 +202,7 @@ export async function createManualTicket(orgId: string, input: CreateTicketBody,
     const id = await insertTicket(
       tx,
       orgId,
-      { ...input, source: 'manual', status, triagedAt: status === 'new' ? null : new Date() },
+      { ...input, source: 'manual', status, createdById: actorId, triagedAt: status === 'new' ? null : new Date() },
       actorId
     );
     return getTicket(orgId, id, tx);

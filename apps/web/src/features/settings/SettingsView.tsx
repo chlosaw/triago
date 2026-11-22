@@ -8,6 +8,7 @@ import { useProfile } from '../auth/context';
 import { RETENTION_DAYS } from '@triago/shared';
 import { DangerZone } from './DangerZone';
 import { GmailCard } from './GmailCard';
+import { TeamCard } from './TeamCard';
 
 export function SettingsView({ org, members }: { org: Organisation; members: Member[] }) {
   const { user, role } = useProfile();
@@ -20,10 +21,7 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
     <div className="account-page">
       <div className="account-left">
         <div className="account-header-row">
-          <div>
-            <span className="section-kicker">Settings</span>
-            <h2>Mail intake</h2>
-          </div>
+          <h2>Mail intake</h2>
           <span className={`connection-chip ${org.gmail.email ? 'is-on' : ''}`}>
             {org.gmail.email ? 'Gmail connected' : 'Gmail not connected'}
           </span>
@@ -136,6 +134,7 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
             </fieldset>
           </div>
         </Card>
+        <TeamCard org={org} members={members} />
         {!readOnly && <DangerZone org={org} />}
       </div>
 
@@ -154,16 +153,6 @@ export function SettingsView({ org, members }: { org: Organisation; members: Mem
             <strong>
               {user.email} · {role}
             </strong>
-          </div>
-          <div className="account-info-row">
-            <span className="mini-label">Members</span>
-            <div className="member-list">
-              {members.map((member) => (
-                <div key={member.id}>
-                  {member.name} <span>{member.role}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </Card>

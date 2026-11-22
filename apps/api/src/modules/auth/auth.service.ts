@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { Profile, RegisterBody, Role } from '@triago/shared';
+import type { InvitationPreview, Profile, RegisterBody, Role } from '@triago/shared';
 import argon2 from 'argon2';
 import { config } from '../../config.js';
 import { prisma, type Tx } from '../../lib/db.js';
@@ -7,6 +7,7 @@ import { HttpError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { signAccessToken, type AuthContext } from '../../middleware/auth.js';
 import { createSandbox } from '../demo/demo.service.js';
+import { hashInviteToken } from '../org/team.service.js';
 
 export interface Session {
   accessToken: string;
@@ -170,9 +171,94 @@ export async function getProfile(auth: AuthContext): Promise<Profile> {
   });
   if (!membership) throw new HttpError(401, 'UNAUTHENTICATED', 'You no longer have access to this organisation.');
 
+  const all = await prisma.membership.findMany({
+    where: { userId: auth.userId },
+    orderBy: { createdAt: 'asc' },
+    select: { role: true, org: { select: { id: true, name: true } } }
+  });
   return {
     user: { id: membership.user.id, name: membership.user.name, email: membership.user.email },
     org: { id: membership.org.id, name: membership.org.name, isDemo: membership.org.isDemo },
-    role: membership.role satisfies Role
+    role: membership.role satisfies Role,
+    orgs: all.map((m) => ({ id: m.org.id, name: m.org.name, role: m.role }))
   };
+}
+
+/** A new session in another organisation the user belongs to. */
+export async function switchOrganisation(auth: AuthContext, orgId: string): Promise<Session> {
+  return prisma.$transaction(async (tx) => {
+    const membership = await tx.membership.findUnique({
+      where: { orgId_userId: { orgId, userId: auth.userId } },
+      select: { role: true }
+    });
+    if (!membership) throw new HttpError(403, 'FORBIDDEN', "You're not a member of that organisation.");
+    return issueSession(tx, { userId: auth.userId, orgId, role: membership.role });
+  });
+}
+
+const invitationGone = () =>
+  new HttpError(400, 'INVALID_INVITATION', 'This invitation has expired, was revoked or was already used.');
+
+/** What the invitation page shows. Knowing the token is what grants access, as with a reset link. */
+export async function previewInvitation(token: string): Promise<InvitationPreview> {
+  const row = await prisma.invitation.findUnique({
+    where: { tokenHash: hashInviteToken(token) },
+    include: { org: { select: { name: true } }, invitedBy: { select: { name: true } } }
+  });
+  if (!row || row.acceptedAt || row.expiresAt < new Date()) throw invitationGone();
+  const user = await prisma.user.findUnique({ where: { email: row.email }, select: { passwordHash: true } });
+  return {
+    orgName: row.org.name,
+    email: row.email,
+    role: row.role,
+    invitedBy: row.invitedBy?.name ?? null,
+    accountExists: Boolean(user?.passwordHash)
+  };
+}
+
+/**
+ * Joins the organisation from an invitation and signs in to it. A new person creates
+ * their account here (the emailed link proves the address is theirs); someone who
+ * already has an account proves it with their password.
+ */
+export async function acceptInvitation(input: { token: string; name?: string; password: string }): Promise<Session> {
+  // Hashed outside the transaction; only used if this turns out to be a new account.
+  const newHash = await argon2.hash(input.password);
+  return prisma.$transaction(async (tx) => {
+    const [invite] = await tx.$queryRaw<{ id: string; org_id: string; email: string; role: Role; usable: boolean }[]>`
+      select id, org_id, email::text as email, role::text as role,
+             (accepted_at is null and expires_at > now()) as usable
+        from invitations where token_hash = ${hashInviteToken(input.token)} for update`;
+    if (!invite?.usable) throw invitationGone();
+
+    let user = await tx.user.findUnique({
+      where: { email: invite.email },
+      select: { id: true, passwordHash: true }
+    });
+    if (user) {
+      const valid = user.passwordHash ? await argon2.verify(user.passwordHash, input.password) : false;
+      if (!valid) throw new HttpError(401, 'INVALID_CREDENTIALS', 'That password is not right for this account.');
+    } else {
+      if (!input.name) throw new HttpError(400, 'VALIDATION_FAILED', 'Enter your name.', { name: 'Enter your name.' });
+      if (input.password.length < 10) {
+        throw new HttpError(400, 'VALIDATION_FAILED', 'Use at least 10 characters.', {
+          password: 'Use at least 10 characters.'
+        });
+      }
+      user = await tx.user.create({
+        data: { email: invite.email, name: input.name, passwordHash: newHash },
+        select: { id: true, passwordHash: true }
+      });
+    }
+
+    const existing = await tx.membership.findUnique({
+      where: { orgId_userId: { orgId: invite.org_id, userId: user.id } },
+      select: { role: true }
+    });
+    const role = existing?.role ?? invite.role;
+    if (!existing) await tx.membership.create({ data: { orgId: invite.org_id, userId: user.id, role } });
+    await tx.invitation.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
+    logger.info({ orgId: invite.org_id, userId: user.id }, 'Invitation accepted');
+    return issueSession(tx, { userId: user.id, orgId: invite.org_id, role });
+  });
 }

@@ -5,6 +5,8 @@ import { AuthPage } from './pages/AuthPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { QueuePage } from './pages/QueuePage';
 import { SettingsPage } from './pages/SettingsPage';
+import { TicketPage } from './pages/TicketPage';
+import { TicketsPage } from './pages/TicketsPage';
 
 export function App() {
   const { state } = useAuth();
@@ -20,6 +22,7 @@ export function App() {
         <Route path="/register" element={<AuthPage mode="register" />} />
         <Route path="/forgot-password" element={<AuthPage mode="forgot" />} />
         <Route path="/reset-password" element={<AuthPage mode="reset" />} />
+        <Route path="/invite" element={<AuthPage mode="invite" />} />
         <Route path="*" element={<Navigate to="/register" replace />} />
       </Routes>
     );
@@ -29,11 +32,15 @@ export function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="tickets" element={<TicketsPage />} />
+        <Route path="tickets/mine" element={<TicketsPage mine />} />
+        <Route path="tickets/:id" element={<TicketPage />} />
         <Route path="queue" element={<QueuePage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
-      {/* A reset link opened while signed in still works. */}
+      {/* Reset and invitation links opened while signed in still work. */}
       <Route path="/reset-password" element={<AuthPage mode="reset" />} />
+      <Route path="/invite" element={<AuthPage mode="invite" />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

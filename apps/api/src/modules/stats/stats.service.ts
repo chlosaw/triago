@@ -10,7 +10,12 @@ const RANGES: Record<StatsRange, { unit: 'hour' | 'day'; buckets: number }> = {
   month: { unit: 'day', buckets: 30 }
 };
 
-export async function getStats(orgId: string, timeZone: string, range: StatsRange = 'week'): Promise<Stats> {
+export async function getStats(
+  orgId: string,
+  timeZone: string,
+  range: StatsRange = 'week',
+  userId?: string
+): Promise<Stats> {
   const { unit, buckets } = RANGES[range];
   const step = `1 ${unit}`;
   const [[totals], byStatus, last7Days, series] = await Promise.all([
@@ -18,6 +23,7 @@ export async function getStats(orgId: string, timeZone: string, range: StatsRang
       {
         awaiting_triage: number;
         active: number;
+        mine: number;
         filed: number;
         filed_from_email: number;
         median_triage_seconds: number | null;
@@ -26,6 +32,8 @@ export async function getStats(orgId: string, timeZone: string, range: StatsRang
       select
         count(*) filter (where status = 'new')::int                                       as awaiting_triage,
         count(*) filter (where status in ('open', 'waiting'))::int                        as active,
+        count(*) filter (where status in ('new', 'open', 'waiting')
+                           and assignee_id = ${userId ?? null}::uuid)::int                 as mine,
         count(*) filter (where status not in ('new', 'dismissed'))::int                   as filed,
         count(*) filter (where status not in ('new', 'dismissed') and source = 'email')::int as filed_from_email,
         percentile_cont(0.5) within group (order by extract(epoch from triaged_at - received_at))
@@ -69,6 +77,7 @@ export async function getStats(orgId: string, timeZone: string, range: StatsRang
   return {
     awaitingTriage: totals!.awaiting_triage,
     active: totals!.active,
+    mine: totals!.mine,
     filed: totals!.filed,
     filedFromEmail: totals!.filed_from_email,
     medianTriageMinutes: totals!.median_triage_seconds === null ? null : Math.round(totals!.median_triage_seconds / 60),

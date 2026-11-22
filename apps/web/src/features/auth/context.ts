@@ -15,6 +15,10 @@ export interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   startDemo: () => Promise<void>;
+  /** Joins an organisation from an invitation link and signs in to it. */
+  acceptInvite: (input: { token: string; name?: string; password: string }) => Promise<void>;
+  /** Moves to another organisation the user belongs to. */
+  switchOrg: (orgId: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 

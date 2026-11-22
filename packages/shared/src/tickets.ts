@@ -103,6 +103,8 @@ export interface Ticket {
   status: Status;
   source: Source;
   requester: { name: string; email: string | null };
+  /** Who reported it: the email's sender, or the member who created a manual ticket. */
+  reporter: { name: string; email: string | null } | null;
   assignee: { id: string; name: string } | null;
   links: TicketLink[];
   aiConfidence: number | null;

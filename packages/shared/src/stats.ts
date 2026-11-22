@@ -6,6 +6,8 @@ export type StatsRange = (typeof STATS_RANGES)[number];
 export interface Stats {
   awaitingTriage: number;
   active: number;
+  /** Open tickets (New, In progress, On hold) assigned to the caller. */
+  mine: number;
   filed: number;
   filedFromEmail: number;
   medianTriageMinutes: number | null;
