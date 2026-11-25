@@ -16,7 +16,8 @@ A full-stack help desk that turns support emails into tickets. An AI model draft
 - **AI drafts, people decide:** the AI suggests title, summary, category and priority; an agent accepts, edits or dismisses the draft.
 - **Works without the AI:** keyword rules draft the ticket when the model is slow, down, or returns something unusable.
 - **Tickets:** create, edit, assign, change status and priority, delete (admins only), attachments, links, internal notes and an activity log.
-- **Search:** by title, summary and requester, plus filters by status and assignee.
+- **Reply to customers:** agents email the requester from the ticket. Replies thread under the customer's original email, and their answer comes back to the inbound address. If the email can't be sent, nothing is saved and the agent is told.
+- **Search and filters:** search by title, summary and requester; filter by status, priority, assignee and date received.
 - **Teams and roles:** admins and agents, email invitations, password reset; one person can belong to several organisations.
 - **Dashboard:** your tickets and team statistics.
 - **Demo sandbox:** every visitor gets a private, pre-filled organisation that is deleted after a day.
@@ -51,7 +52,7 @@ A full-stack help desk that turns support emails into tickets. An AI model draft
 3. A ticket is created immediately with keyword-rule values, marked as "drafting".
 4. A job sends a trimmed copy of the email (no quoted history, signature or footer) to the AI model.
 5. If the model returns a valid draft, the ticket is updated. If it times out, errors or returns invalid JSON, the ticket keeps the keyword values and is flagged `ai_failed` for manual triage.
-6. An agent reviews the draft in the queue and accepts or dismisses it.
+6. An agent reviews the draft in the queue and accepts or dismisses it, then works the ticket and replies to the customer from it.
 
 ## Key decisions
 
