@@ -141,10 +141,7 @@ export function TicketTable({
                   <th>Summary</th>
                   <th>Reporter</th>
                   <th>Assignee</th>
-                  <th>
-                    <span className="visually-hidden">Priority</span>
-                    <span aria-hidden="true">P</span>
-                  </th>
+                  <th>Priority</th>
                   <th>Status</th>
                 </tr>
               </thead>

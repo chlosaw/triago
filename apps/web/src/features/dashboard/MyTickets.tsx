@@ -79,24 +79,40 @@ export function MyTickets() {
 
 function TicketList({ tickets }: { tickets: Ticket[] }) {
   return (
-    <ul className="my-list">
+    <div className="my-table" role="table" aria-label="Tickets">
+      <div className="my-row my-head" role="row">
+        <span role="columnheader">Key</span>
+        <span role="columnheader">Title</span>
+        <span role="columnheader">Priority</span>
+        <span role="columnheader">Status</span>
+        <span role="columnheader" className="my-time">
+          Received
+        </span>
+      </div>
       {tickets.map((ticket) => (
-        <li key={ticket.id} className="my-row">
-          <span className="my-key">
+        <div key={ticket.id} className="my-row" role="row">
+          <span className="my-key" role="cell">
             <CategoryIcon category={ticket.category} />
             <span className="ticket-key">{ticket.key}</span>
           </span>
-          <Link className="my-title" to={`/tickets/${ticket.id}`} title={ticket.title}>
-            {ticket.title}
-          </Link>
-          <TriageBadge reason={ticket.manualTriage} />
-          <span title={priorityLabel(ticket.priority)}>
-            <PriorityIcon priority={ticket.priority} />
+          <span className="my-title-cell" role="cell">
+            <Link className="my-title" to={`/tickets/${ticket.id}`} title={ticket.title}>
+              {ticket.title}
+            </Link>
+            <TriageBadge reason={ticket.manualTriage} />
           </span>
-          <StatusSelect ticket={ticket} />
-          <span className="my-time">{formatReceived(ticket.receivedAt)}</span>
-        </li>
+          <span className="my-priority" role="cell">
+            <PriorityIcon priority={ticket.priority} />
+            {priorityLabel(ticket.priority)}
+          </span>
+          <span role="cell">
+            <StatusSelect ticket={ticket} />
+          </span>
+          <span className="my-time" role="cell">
+            {formatReceived(ticket.receivedAt)}
+          </span>
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }

@@ -5,8 +5,8 @@ import { PageHeader } from '../components/PageHeader';
 import { QueryState } from '../components/QueryState';
 import { useProfile } from '../features/auth/context';
 import { ActivityChart } from '../features/dashboard/ActivityChart';
+import { AiDrafts } from '../features/dashboard/AiDrafts';
 import { MyTickets } from '../features/dashboard/MyTickets';
-import { StatStrip } from '../features/dashboard/StatStrip';
 import { StatusBreakdown } from '../features/dashboard/StatusBreakdown';
 
 export function DashboardPage() {
@@ -20,6 +20,9 @@ export function DashboardPage() {
         crumbs={[{ label: org.name }, { label: 'Dashboard' }]}
         title={`Welcome, ${user.name.split(' ')[0]}`}
       />
+      {/* The AI's drafts lead: they are the work only a person can finish. */}
+      {stats.data && <AiDrafts waiting={stats.data.awaitingTriage} />}
+
       <section className="dash-section" aria-labelledby="my-tickets-heading">
         <h2 id="my-tickets-heading" className="dash-section-title">
           My tickets
@@ -34,8 +37,7 @@ export function DashboardPage() {
         <QueryState query={stats} loadingLabel="Loading metrics…">
           {(data) => (
             <>
-              <StatStrip stats={data} />
-              <StatusBreakdown byStatus={data.byStatus} />
+              <StatusBreakdown stats={data} />
               <ActivityChart
                 activity={data.activity}
                 range={range}
