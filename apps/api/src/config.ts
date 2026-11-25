@@ -28,7 +28,8 @@ const Env = z.object({
   CLIENT_ORIGIN: z.url().default('http://localhost:5173'),
   // Optional: with a free Groq key, new emails are drafted by an AI model; without one, by keyword rules.
   GROQ_API_KEY: optional(z.string().min(1)),
-  CLASSIFIER_MODEL: z.string().min(1).default('llama-3.3-70b-versatile'),
+  // Any Groq chat model with JSON mode. Groq retires models, so this is configurable.
+  CLASSIFIER_MODEL: z.string().min(1).default('openai/gpt-oss-120b'),
   // Inbound email: the domain SendGrid Inbound Parse receives mail for, and the
   // secret in its webhook URL. Without a secret the inbound endpoint is off.
   INBOUND_EMAIL_DOMAIN: optional(
