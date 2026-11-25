@@ -16,7 +16,7 @@ A full-stack help desk that turns support emails into tickets. An AI model draft
 - **AI drafts, people decide:** the AI suggests title, summary, category and priority; an agent accepts, edits or dismisses the draft.
 - **Works without the AI:** keyword rules draft the ticket when the model is slow, down, or returns something unusable.
 - **Tickets:** create, edit, assign, change status and priority, delete (admins only), attachments, links, internal notes and an activity log.
-- **Reply to customers:** agents email the requester from the ticket. Replies thread under the customer's original email, and their answer comes back to the inbound address. If the email can't be sent, nothing is saved and the agent is told.
+- **Customer conversation:** the ticket shows the whole email thread. When the customer is waiting, the AI drafts the next reply and the agent chooses **Approve and send**, **Edit** or **Discard**. Replies thread under the customer's email, and the customer's answer lands back on the same ticket (matched by the `[KEY]` in the subject and the sender), reopening it if it was on hold or closed. If an email can't be sent, nothing is saved and the agent is told.
 - **Search and filters:** search by title, summary and requester; filter by status, priority, assignee and date received.
 - **Teams and roles:** admins and agents, email invitations, password reset; one person can belong to several organisations.
 - **Dashboard:** your tickets and team statistics.
@@ -30,7 +30,7 @@ A full-stack help desk that turns support emails into tickets. An AI model draft
 | Frontend | React 18, TypeScript, Vite, React Router, TanStack Query   |
 | Backend  | Node.js, Express 5, Zod, pino, pg-boss (background jobs)   |
 | Database | PostgreSQL 16, Prisma                                      |
-| AI       | Groq API (Llama 3.3), JSON output validated with Zod       |
+| AI       | Groq API (gpt-oss-120b), JSON output validated with Zod    |
 | Infra    | Docker Compose, nginx, GitHub Actions                      |
 | Tests    | Vitest, Testing Library, Supertest against a real Postgres |
 
@@ -52,11 +52,13 @@ A full-stack help desk that turns support emails into tickets. An AI model draft
 3. A ticket is created immediately with keyword-rule values, marked as "drafting".
 4. A job sends a trimmed copy of the email (no quoted history, signature or footer) to the AI model.
 5. If the model returns a valid draft, the ticket is updated. If it times out, errors or returns invalid JSON, the ticket keeps the keyword values and is flagged `ai_failed` for manual triage.
-6. An agent reviews the draft in the queue and accepts or dismisses it, then works the ticket and replies to the customer from it.
+6. An agent reviews the draft in the queue and accepts or dismisses it.
+7. On the ticket, the AI drafts a reply from the thread; the agent approves, edits or discards it. The customer's answer comes back onto the same ticket.
 
 ## Key decisions
 
 - **Keyword rules as a fallback.** The AI is an outside service that can be slow, rate-limited or wrong. The ticket is saved before the AI is called, and simple keyword rules fill in category and priority, so an email is never lost and the app never waits on the model. Failures are flagged so a person checks those tickets.
+- **AI replies are drafts too.** The reply model is told to use only facts from the thread and never to promise refunds, fixes or timelines; the agent adds commitments. Nothing is emailed until a person clicks Approve and send. Without the model, a short template stands in.
 - **The AI drafts, an agent accepts.** Priority and category decide who sees a ticket and how fast. A wrong guess that went straight into the queue could bury an urgent customer. Keeping a person in the loop makes the AI a time-saver rather than a risk, and the model's confidence is shown to help the agent decide.
 - **A separate sandbox per demo visitor.** A shared demo account gets messy and lets one visitor see or break what another did. Each "Try the demo" click creates a private organisation with sample tickets, and an hourly job deletes sandboxes older than a day.
 - **One shared types package.** Request and response shapes are defined once as Zod schemas in `packages/shared`. The API uses them to validate input and the frontend uses the same types, so a change to the API that breaks the frontend fails the type check instead of failing in production.

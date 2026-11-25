@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        width: 2000px;
+        height: 1000px;
+        position: relative;
+        overflow: hidden;
+        background: #f2f2f2;
+        color: #1d1f24;
+        font-family: 'IBM Plex Sans', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+      }
+      h1 {
+        position: absolute;
+        left: 66px;
+        top: 44px;
+        margin: 0;
+        font-family: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+        font-stretch: condensed;
+        font-weight: 800;
+        font-size: 44px;
+        letter-spacing: 0.04em;
+      }
+      .sub {
+        position: absolute;
+        left: 66px;
+        top: 106px;
+        font-size: 20px;
+        color: #3a3d44;
+      }
+      .box {
+        position: absolute;
+        padding: 26px 32px;
+        border: 1.5px solid #c9ccd2;
+        background: #fff;
+      }
+      .box.app {
+        background: #edf4fd;
+        border-color: #3f5f86;
+      }
+      .box.db {
+        background: #d6e7fb;
+        border-color: #3f5f86;
+      }
+      .box.ext {
+        background: #fff;
+        border-color: #3f5f86;
+      }
+      .kicker {
+        font-size: 17px;
+        letter-spacing: 0.12em;
+        color: #3f5f86;
+        text-transform: uppercase;
+      }
+      .title {
+        margin-top: 18px;
+        font-size: 25px;
+        font-weight: 700;
+      }
+      .line {
+        margin-top: 8px;
+        font-size: 20px;
+        line-height: 1.5;
+        color: #2d3038;
+      }
+      .inner {
+        margin: 18px 0 4px;
+        padding: 16px 22px;
+        border: 1.5px solid #c9ccd2;
+        background: #fff;
+        font-size: 23px;
+        font-weight: 700;
+      }
+      .svc {
+        display: grid;
+        grid-template-columns: 210px 1fr;
+        gap: 6px 14px;
+        margin-top: 16px;
+        font-size: 19px;
+        line-height: 1.4;
+      }
+      .svc b {
+        font-weight: 700;
+      }
+      .svc span {
+        color: #2d3038;
+      }
+      .label {
+        position: absolute;
+        font-size: 20px;
+        color: #2d3038;
+        background: #f2f2f2;
+        padding: 0 6px;
+      }
+      svg {
+        position: absolute;
+        inset: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>TRIAGO ARCHITECTURE</h1>
+    <div class="sub">
+      Solid arrows: requests and queries. Dotted: code imports. Every external service is optional and has a fallback.
+    </div>
+
+    <!-- Column 1 -->
+    <div class="box" style="left: 66px; top: 180px; width: 418px; height: 230px">
+      <div class="kicker">apps/web</div>
+      <div class="title">React SPA</div>
+      <div class="line">
+        React Router, TanStack Query<br />Access token in memory,<br />refresh token in httpOnly cookie
+      </div>
+    </div>
+    <div class="box" style="left: 66px; top: 500px; width: 418px; height: 150px">
+      <div class="kicker">Docker: web</div>
+      <div class="title">nginx</div>
+      <div class="line">Static files, proxies /api</div>
+    </div>
+    <div class="box" style="left: 66px; top: 760px; width: 418px; height: 170px">
+      <div class="kicker">packages/shared</div>
+      <div class="title">Zod schemas + types</div>
+      <div class="line">One source for both apps</div>
+    </div>
+
+    <!-- Column 2 -->
+    <div class="box app" style="left: 633px; top: 180px; width: 634px; height: 520px">
+      <div class="kicker">apps/api · Express 5</div>
+      <div class="title">Middleware</div>
+      <div class="line" style="margin-top: 4px">helmet · CORS · rate limits · pino · JWT auth (org + role)</div>
+      <div class="inner">routes → controllers (zod) → services</div>
+      <div class="title" style="margin-top: 20px">Modules</div>
+      <div class="line" style="margin-top: 4px">
+        auth · tickets · replies · emails · gmail · inbound · org · stats · demo
+      </div>
+      <div class="title" style="margin-top: 20px">Every query is scoped to the caller's org_id</div>
+      <div class="line" style="margin-top: 4px">Prisma for reads and writes, $queryRaw for analytics</div>
+    </div>
+    <div class="box app" style="left: 633px; top: 760px; width: 634px; height: 170px">
+      <div class="kicker">apps/api/src/jobs · pg-boss</div>
+      <div class="title" style="margin-top: 12px">Background jobs</div>
+      <div class="line" style="margin-top: 4px">
+        AI ticket drafts · Gmail sync every 2 min<br />Demo cleanup hourly · data retention nightly
+      </div>
+    </div>
+
+    <!-- Column 3 -->
+    <div class="box ext" style="left: 1433px; top: 180px; width: 500px; height: 390px">
+      <div class="kicker">External services</div>
+      <div class="svc">
+        <b>Groq (LLM)</b><span>Ticket drafts, reply drafts, grammar. Falls back to keyword rules and a template</span>
+        <b>Gmail API</b><span>OAuth mailbox sync</span> <b>SendGrid Inbound</b
+        ><span>Forwarded mail → webhook; replies thread by [KEY]</span> <b>Resend</b
+        ><span>Replies to customers, invites, password resets</span>
+      </div>
+    </div>
+    <div class="box db" style="left: 1433px; top: 640px; width: 500px; height: 290px">
+      <div class="kicker">Docker: db</div>
+      <div class="title" style="margin-top: 12px">PostgreSQL 16</div>
+      <div class="line" style="margin-top: 6px">
+        organisations · users · memberships<br />tickets · messages · ticket_events<br />attachments · invitations ·
+        gmail
+      </div>
+      <div class="line" style="margin-top: 10px">
+        Composite (org_id, id) foreign keys<br />pgboss schema for job queues
+      </div>
+    </div>
+
+    <svg width="2000" height="1000" viewBox="0 0 2000 1000">
+      <defs>
+        <marker
+          id="a"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="9"
+          markerHeight="9"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0 10 5 0 10z" fill="#3f5f86" />
+        </marker>
+      </defs>
+      <g fill="none" stroke="#3f5f86" stroke-width="2.5">
+        <!-- web → nginx -->
+        <path d="M275 410 V496" marker-end="url(#a)" />
+        <!-- nginx → api -->
+        <path d="M484 575 C 560 575, 560 470, 629 470" marker-end="url(#a)" />
+        <!-- api → external services (calls out) -->
+        <path d="M1267 290 H1429" marker-end="url(#a)" />
+        <!-- inbound webhook → api -->
+        <path d="M1433 480 H1271" marker-end="url(#a)" />
+        <!-- api → db -->
+        <path d="M1267 660 C 1340 660, 1350 700, 1429 700" marker-end="url(#a)" />
+        <!-- jobs → db -->
+        <path d="M1267 850 H1429" marker-end="url(#a)" />
+      </g>
+      <g fill="none" stroke="#3a3d44" stroke-width="2" stroke-dasharray="3 6">
+        <!-- shared imported by web and api -->
+        <path d="M66 845 H36 V295 H66" />
+        <path d="M484 845 C 560 845, 560 700, 629 690" />
+      </g>
+    </svg>
+    <div class="label" style="left: 290px; top: 438px">HTTPS</div>
+    <div class="label" style="left: 508px; top: 492px">/api</div>
+    <div class="label" style="left: 1290px; top: 252px">HTTPS</div>
+    <div class="label" style="left: 1280px; top: 442px">webhook</div>
+    <div class="label" style="left: 1300px; top: 620px">Prisma</div>
+    <div class="label" style="left: 1300px; top: 812px">pg-boss</div>
+    <div class="label" style="left: 500px; top: 752px">imports</div>
+  </body>
+</html>
