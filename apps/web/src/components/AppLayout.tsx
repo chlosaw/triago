@@ -1,12 +1,11 @@
 import type { Ticket } from '@triago/shared';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useStats } from '../api/queries';
-import { useAuth, useProfile } from '../features/auth/context';
+import { useProfile } from '../features/auth/context';
 import { CreateTicketDialog } from '../features/tickets/CreateTicketDialog';
 import { Brand } from './Brand';
-import { Avatar } from './Icons';
-import { ThemeToggle } from './ThemeToggle';
+import { UserMenu } from './UserMenu';
 
 const icon = (d: ReactNode) => (
   <svg
@@ -50,9 +49,7 @@ const ICONS = {
 };
 
 export function AppLayout() {
-  const { logout, switchOrg } = useAuth();
-  const { user, org, role, orgs } = useProfile();
-  const navigate = useNavigate();
+  const { org } = useProfile();
   const stats = useStats().data;
   const count = (statuses: string[]) =>
     statuses.reduce((sum, status) => sum + (stats?.byStatus[status as keyof typeof stats.byStatus] ?? 0), 0);
@@ -146,44 +143,7 @@ export function AppLayout() {
           </nav>
 
           <div className="sidebar-footer">
-            <div className="sidebar-user">
-              <Avatar name={user.name} size={32} />
-              <span className="sidebar-user-meta">
-                <strong>{user.name}</strong>
-                {orgs.length > 1 ? (
-                  <select
-                    className="org-switcher"
-                    aria-label="Organisation"
-                    value={org.id}
-                    onChange={(event) => void switchOrg(event.target.value).then(() => navigate('/'))}
-                  >
-                    {orgs.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name} · {o.role}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span>
-                    {org.name} · {role}
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="sidebar-actions">
-              <ThemeToggle />
-              <button
-                type="button"
-                className="btn btn-subtle"
-                onClick={() => {
-                  // Land on the homepage, not the sign-in form, after signing out.
-                  navigate('/', { replace: true });
-                  void logout();
-                }}
-              >
-                Sign out
-              </button>
-            </div>
+            <UserMenu />
           </div>
         </div>
       </aside>
