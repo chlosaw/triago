@@ -5,6 +5,7 @@ import { Card } from '../../components/Card';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { ErrorState } from '../../components/QueryState';
 import { useAuth, useProfile } from '../auth/context';
+import { formatDate } from '../../lib/dates';
 
 const ROLE_HELP: Record<Role, string> = {
   admin: 'Manages settings, Gmail and the team, and can delete tickets.',
@@ -123,8 +124,7 @@ export function TeamCard({ org, members }: { org: Organisation; members: Member[
                   <span className="team-who">
                     <strong>{invitation.email}</strong>
                     <span>
-                      {invitation.role === 'admin' ? 'Admin' : 'Agent'} · expires{' '}
-                      {new Date(invitation.expiresAt).toLocaleDateString()}
+                      {invitation.role === 'admin' ? 'Admin' : 'Agent'} · expires {formatDate(invitation.expiresAt)}
                     </span>
                   </span>
                   <ConfirmButton

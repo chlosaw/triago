@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useGmailActions } from '../../api/queries';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { ErrorState } from '../../components/QueryState';
+import { formatDateTime } from '../../lib/dates';
 
 /** Connect, show and disconnect the organisation's Gmail mailbox. */
 export function GmailCard({ org, readOnly }: { org: Organisation; readOnly: boolean }) {
@@ -29,7 +30,7 @@ export function GmailCard({ org, readOnly }: { org: Organisation; readOnly: bool
               <span>
                 Triago checks {label === 'inbox' ? 'the Inbox' : `the “${label}” label`} every two minutes and drafts a
                 ticket in New for each email from the last 7 days.
-                {gmail.lastSyncedAt && ` Last checked ${new Date(gmail.lastSyncedAt).toLocaleString()}.`}
+                {gmail.lastSyncedAt && ` Last checked ${formatDateTime(gmail.lastSyncedAt)}.`}
               </span>
             </>
           ) : gmail.available ? (

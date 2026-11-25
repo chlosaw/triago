@@ -2,6 +2,7 @@ import { useId } from 'react';
 import { useOrg, useTicketEvents } from '../../api/queries';
 import { QueryState } from '../../components/QueryState';
 import { describeEvent } from './describeEvent';
+import { formatDateTime, formatRelative } from '../../lib/dates';
 
 /** Who did what to a ticket, oldest first. */
 export function ActivityTimeline({ ticketId }: { ticketId: string }) {
@@ -27,8 +28,8 @@ export function ActivityTimeline({ ticketId }: { ticketId: string }) {
                 <span className="timeline-text">
                   <strong>{event.actor ?? 'Triago'}</strong> {describeEvent(event, members)}
                 </span>
-                <time className="timeline-time" dateTime={event.createdAt}>
-                  {new Date(event.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                <time className="timeline-time" dateTime={event.createdAt} title={formatRelative(event.createdAt)}>
+                  {formatDateTime(event.createdAt)}
                 </time>
               </li>
             ))}

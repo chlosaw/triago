@@ -1,4 +1,5 @@
 import type { Category, ManualTriageReason, Priority, SettableStatus, Status } from '@triago/shared';
+import { formatDayMonth, formatTime } from './dates';
 
 export const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: 'bug', label: 'Bug' },
@@ -47,10 +48,10 @@ export function formatReceived(iso: string): string {
   yesterday.setDate(today.getDate() - 1);
 
   if (date.toDateString() === today.toDateString()) {
-    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return formatTime(date);
   }
   if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  return formatDayMonth(date);
 }
 
 /** "2.4 MB", "830 KB", "512 B". */

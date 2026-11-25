@@ -1,6 +1,7 @@
 import type { Stats, StatsRange } from '@triago/shared';
 import { Card } from '../../components/Card';
 import { Segmented } from '../../components/Segmented';
+import { formatDayMonth, formatTime } from '../../lib/dates';
 
 const RANGE_OPTIONS: { value: StatsRange; label: string }[] = [
   { value: 'day', label: 'Day' },
@@ -18,17 +19,19 @@ const RANGE_NOTE: Record<StatsRange, string> = {
 function bucketLabel(bucket: string, range: StatsRange, index: number, count: number): string {
   const date = new Date(bucket);
   if (range === 'day') {
-    return index % 4 === 0 ? date.toLocaleTimeString([], { hour: 'numeric' }) : '';
+    return index % 4 === 0 ? formatTime(date) : '';
   }
-  if (range === 'week') return date.toLocaleDateString([], { weekday: 'short' });
-  return index % 5 === 0 || index === count - 1 ? date.toLocaleDateString([], { day: 'numeric', month: 'short' }) : '';
+  if (range === 'week') return date.toLocaleDateString('en-GB', { weekday: 'short' });
+  return index % 5 === 0 || index === count - 1
+    ? date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    : '';
 }
 
 function bucketTitle(bucket: string, range: StatsRange): string {
   const date = new Date(bucket);
   return range === 'day'
-    ? date.toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })
-    : date.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+    ? `${date.toLocaleDateString('en-GB', { weekday: 'short' })} ${formatTime(date)}`
+    : formatDayMonth(date);
 }
 
 export function ActivityChart({

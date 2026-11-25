@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { htmlToMarkdown, markdownToHtml, TEXT_COLORS, type TextColor } from '../lib/markdown';
+import { formatDate } from '../lib/dates';
 
 /**
  * A description editor with a formatting toolbar and two tabs, like Jira's:
@@ -465,7 +466,7 @@ export function RichTextEditor({
                       if (item === 'Divider') act.rule();
                       else if (item === 'Code block') act.style(BLOCK_STYLES[4]);
                       else if (item === 'Quote') act.style(BLOCK_STYLES[5]);
-                      else act.insert(new Date().toLocaleDateString());
+                      else act.insert(formatDate(new Date()));
                     });
                   }}
                 >
