@@ -513,4 +513,79 @@ export async function seedOrganisation(tx: Tx, orgId: string, actorId: string): 
   for (const { ageHours, ...ticket } of [...QUEUE].reverse()) {
     await insertTicket(tx, orgId, { ...ticket, receivedAt: hoursAgo(ageHours) }, null);
   }
+  await giveVisitorWork(tx, orgId, actorId);
+}
+
+/** Tickets assigned to the visitor, so "My tickets" on the dashboard is not empty. */
+const VISITOR_TICKETS = [
+  'Charged twice for the November invoice',
+  'Password reset email never arrives',
+  'Can we change the ticket prefix?',
+  'Add a dark mode to the customer portal',
+  'Webhook payload missing the priority field'
+];
+
+/**
+ * Assigns the visitor a few tickets and gives one a real back-and-forth: the visitor
+ * asked a question, the customer answered, and the next reply is the visitor's to write.
+ */
+async function giveVisitorWork(tx: Tx, orgId: string, visitorId: string): Promise<void> {
+  const visitor = await tx.user.findUniqueOrThrow({ where: { id: visitorId }, select: { name: true } });
+  const mine = await tx.ticket.findMany({
+    where: { orgId, title: { in: VISITOR_TICKETS } },
+    select: { id: true, title: true, receivedAt: true, requesterName: true, requesterEmail: true }
+  });
+  for (const ticket of mine) {
+    await tx.ticket.update({ where: { id: ticket.id }, data: { assigneeId: visitorId } });
+    await tx.ticketEvent.create({
+      data: {
+        orgId,
+        ticketId: ticket.id,
+        actorId: visitorId,
+        type: 'field_changed',
+        data: { field: 'assigneeId', from: null, to: visitorId },
+        createdAt: minutesAfter(ticket.receivedAt, 8)
+      }
+    });
+  }
+
+  const charged = mine.find((ticket) => ticket.title === VISITOR_TICKETS[0]);
+  if (!charged?.requesterEmail) return;
+  const asked = minutesAfter(charged.receivedAt, 20);
+  const answered = minutesAfter(charged.receivedAt, 75);
+  const question = await tx.message.create({
+    data: {
+      orgId,
+      ticketId: charged.id,
+      kind: 'outbound',
+      authorId: visitorId,
+      fromName: visitor.name,
+      body: 'Hi Sam,\n\nSorry about that. I can see two payments for INV-2291. Could you tell me the last four digits of the card, so I refund the right one?',
+      createdAt: asked
+    }
+  });
+  await tx.ticketEvent.create({
+    data: {
+      orgId,
+      ticketId: charged.id,
+      actorId: visitorId,
+      type: 'replied',
+      data: { messageId: question.id, sent: false },
+      createdAt: asked
+    }
+  });
+  await tx.message.create({
+    data: {
+      orgId,
+      ticketId: charged.id,
+      kind: 'inbound',
+      fromName: charged.requesterName,
+      fromEmail: charged.requesterEmail,
+      body: "Thanks for the quick reply! It's the Visa ending 4417. Both payments are dated this morning, 09:12 and 09:13.",
+      createdAt: answered
+    }
+  });
+  await tx.ticketEvent.create({
+    data: { orgId, ticketId: charged.id, actorId: null, type: 'customer_replied', data: {}, createdAt: answered }
+  });
 }
