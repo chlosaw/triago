@@ -18,6 +18,9 @@ ticketsRouter.delete('/:id', requireRole('admin'), controller.remove);
 // Each reply emails a customer, so cap them per organisation.
 const replyLimiter = limiter({ name: 'reply', windowMinutes: 10, limit: 60, key: (req) => getAuth(req).orgId });
 ticketsRouter.post('/:id/replies', replyLimiter, controller.reply);
+// Each draft can call a paid model, so cap them per organisation too.
+const draftLimiter = limiter({ name: 'reply-draft', windowMinutes: 10, limit: 60, key: (req) => getAuth(req).orgId });
+ticketsRouter.post('/:id/reply-draft', draftLimiter, controller.replyDraft);
 
 // Internal notes on a ticket. Authorship is checked in the service.
 ticketsRouter.post('/:id/notes', controller.addNote);

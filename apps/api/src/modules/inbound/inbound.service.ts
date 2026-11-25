@@ -26,6 +26,7 @@ export type InboundEmailPayload = z.infer<typeof InboundEmailPayload>;
 
 export type InboundResult =
   | { status: 'created'; ticketId: string; manualTriage: string | null }
+  | { status: 'appended'; ticketId: string }
   | { status: 'duplicate' }
   | { status: 'ignored'; reason: 'unknown_recipient' };
 
@@ -59,6 +60,8 @@ export async function receiveEmail(email: InboundEmailPayload): Promise<InboundR
   });
   if (result.status === 'created') {
     logger.info({ orgId: org.id, ticketId: result.ticketId, manualTriage: result.manualTriage }, 'Inbound email saved');
+  } else if (result.status === 'appended') {
+    logger.info({ orgId: org.id, ticketId: result.ticketId }, 'Customer reply added to its ticket');
   }
   return result;
 }

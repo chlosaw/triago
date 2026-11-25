@@ -88,6 +88,10 @@ export async function reply(req: Request, res: Response) {
   res.status(201).json(await replies.sendReply(getAuth(req), TicketId.parse(req.params.id), body));
 }
 
+export async function replyDraft(req: Request, res: Response) {
+  res.json(await replies.draftReply(getAuth(req), TicketId.parse(req.params.id)));
+}
+
 export async function addNote(req: Request, res: Response) {
   const { body } = NoteBody.parse(req.body);
   res.status(201).json({ note: await notes.addNote(getAuth(req), TicketId.parse(req.params.id), body) });

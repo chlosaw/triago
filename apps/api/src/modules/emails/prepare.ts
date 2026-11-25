@@ -33,7 +33,11 @@ function cutAt(text: string, pattern: RegExp, minKeep = 0): string {
   return match && match.index >= minKeep ? text.slice(0, match.index) : text;
 }
 
-export function prepareForModel(body: string): string {
+/**
+ * The new part of an email: quoted earlier conversation, signature and a trailing legal
+ * footer removed. Used for the model's copy and for a customer's answer on an existing ticket.
+ */
+export function stripQuotedHistory(body: string): string {
   const original = body.replace(/\r\n?/g, '\n');
   let text = original;
 
@@ -52,8 +56,11 @@ export function prepareForModel(body: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   // An email that was nothing but a quote: better to send the quote than nothing.
-  if (!text) text = original.trim();
+  return text || original.trim();
+}
 
+export function prepareForModel(body: string): string {
+  const text = stripQuotedHistory(body);
   return text.length > MAX_MODEL_CHARS ? `${text.slice(0, MAX_MODEL_CHARS)}\n[…email shortened for triage]` : text;
 }
 

@@ -80,6 +80,15 @@ export const ReplyBody = z.object({
 });
 export type ReplyBody = z.infer<typeof ReplyBody>;
 
+/** A suggested reply for the agent to approve, edit or discard. Nothing is sent until they do. */
+export interface ReplyDraft {
+  body: string;
+  /** `ai` when the model wrote it; `template` when no model is configured or it failed. */
+  engine: 'ai' | 'template';
+  /** True when a model is configured but could not write a usable draft. */
+  aiFailed?: boolean;
+}
+
 export interface ReplyResult {
   reply: Message;
   /** False in the demo, where replies are saved but no email leaves the app. */

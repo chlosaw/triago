@@ -7,7 +7,7 @@ import { safeError } from '../../middleware/error-handler.js';
 import { applyAiDraft, insertTicket } from '../tickets/tickets.service.js';
 import { classify } from './classifier.js';
 import { aiConfigured, draftTicket, type ChatClient } from './llm-classifier.js';
-import { looksLikePromptInjection } from './prepare.js';
+import { looksLikePromptInjection, stripQuotedHistory } from './prepare.js';
 
 /**
  * The one way an email becomes a ticket, whatever channel it came from.
@@ -39,7 +39,10 @@ export interface IncomingEmail {
 }
 
 export type StoreResult =
-  { status: 'created'; ticketId: string; manualTriage: ManualTriageReason | null } | { status: 'duplicate' };
+  | { status: 'created'; ticketId: string; manualTriage: ManualTriageReason | null }
+  /** A customer's answer to a reply, added to the ticket it belongs to. */
+  | { status: 'appended'; ticketId: string }
+  | { status: 'duplicate' };
 
 export interface DraftJob {
   orgId: string;
@@ -64,6 +67,12 @@ export async function storeEmail(
     select: { id: true }
   });
   if (seen) return { status: 'duplicate' };
+
+  // Spam is never threaded onto a real ticket; it is filed on its own.
+  if (!email.hold) {
+    const followUp = await appendFollowUp(orgId, email, messageId);
+    if (followUp) return followUp;
+  }
 
   const subject = email.subject.trim() || '(no subject)';
   let body = email.text.trim() || '(This email has no text.)';
@@ -124,6 +133,91 @@ export async function storeEmail(
     }
   }
   return { status: 'created', ticketId, manualTriage };
+}
+
+/** "[BRT-12]" in a subject: the key Triago puts on every reply it sends. */
+const TICKET_KEY = /\[([A-Za-z0-9]{1,12})-(\d{1,9})\]/;
+/** Statuses a customer's answer reopens; a ticket being worked on or still in triage stays as it is. */
+const REOPENS = ['waiting', 'closed', 'resolved'];
+
+/**
+ * Adds a customer's answer to the ticket it replies to: the subject carries the
+ * ticket key and the sender is the ticket's requester. Someone else quoting a key
+ * gets a new ticket, so nobody can write into another customer's thread.
+ * Returns null when the email is not a follow-up.
+ */
+async function appendFollowUp(
+  orgId: string,
+  email: IncomingEmail,
+  messageId: string | null
+): Promise<StoreResult | null> {
+  const match = TICKET_KEY.exec(email.subject);
+  const fromEmail = email.fromEmail?.trim();
+  if (!match || !fromEmail) return null;
+
+  const ticket = await prisma.ticket.findFirst({
+    where: {
+      orgId,
+      number: Number(match[2]),
+      org: { ticketPrefix: { equals: match[1], mode: 'insensitive' } },
+      // citext: the comparison ignores case.
+      requesterEmail: fromEmail
+    },
+    select: { id: true, status: true }
+  });
+  if (!ticket) return null;
+
+  // Follow-ups have no ticket row of their own, so their ids live on the event.
+  const ids = [{ externalId: email.externalId }, ...(messageId ? [{ messageId }] : [])];
+  const seen = await prisma.ticketEvent.findFirst({
+    where: {
+      orgId,
+      ticketId: ticket.id,
+      type: 'customer_replied',
+      OR: ids.map((id) => {
+        const [key, value] = Object.entries(id)[0]!;
+        return { data: { path: [key], equals: value } };
+      })
+    },
+    select: { id: true }
+  });
+  if (seen) return { status: 'duplicate' };
+
+  let body = stripQuotedHistory(email.text) || '(This email has no text.)';
+  if (body.length > MAX_STORED_CHARS) body = `${body.slice(0, MAX_STORED_CHARS)}\n\n[Triago: cut off here.]`;
+  const reopen = REOPENS.includes(ticket.status);
+
+  await prisma.$transaction(async (tx) => {
+    const receivedAt = email.receivedAt ?? new Date();
+    await tx.message.create({
+      data: {
+        orgId,
+        ticketId: ticket.id,
+        kind: 'inbound',
+        fromName: email.fromName.trim() || fromEmail,
+        fromEmail,
+        body,
+        createdAt: receivedAt
+      }
+    });
+    if (reopen) await tx.ticket.update({ where: { id: ticket.id }, data: { status: 'open' } });
+    else await tx.ticket.update({ where: { id: ticket.id }, data: { updatedAt: new Date() } });
+    await tx.ticketEvent.create({
+      data: {
+        orgId,
+        ticketId: ticket.id,
+        actorId: null,
+        type: 'customer_replied',
+        data: {
+          externalId: email.externalId,
+          ...(messageId ? { messageId } : {}),
+          ...(reopen ? { reopenedFrom: ticket.status } : {})
+        },
+        createdAt: receivedAt
+      }
+    });
+  });
+  return { status: 'appended', ticketId: ticket.id };
 }
 
 /** Queues the AI draft; runs it inline when there is no job queue. */
