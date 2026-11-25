@@ -6,9 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { AuthContext, type AuthContextValue } from './features/auth/context';
 
-// The starry background draws on a canvas, which jsdom doesn't have.
-vi.mock('./components/SpaceBackground', () => ({ SpaceBackground: () => null }));
-
 const signedOut: AuthContextValue = {
   state: { status: 'signed-out' },
   login: vi.fn(),

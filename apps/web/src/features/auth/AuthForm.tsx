@@ -82,7 +82,7 @@ export function AuthForm({ mode }: { mode: 'register' | 'login' }) {
           <span>{isRegister ? 'You become its admin.' : 'Welcome back.'}</span>
         </div>
 
-        <button type="button" className="btn btn-secondary btn-block" disabled={busy} onClick={() => run(startDemo)}>
+        <button type="button" className="btn btn-outline btn-block" disabled={busy} onClick={() => run(startDemo)}>
           Try the demo, no sign-up
         </button>
 

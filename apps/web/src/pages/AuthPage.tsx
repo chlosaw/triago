@@ -4,16 +4,22 @@ import { Brand } from '../components/Brand';
 import { Card, Corners } from '../components/Card';
 import { SpaceBackground } from '../components/SpaceBackground';
 import { AuthForm } from '../features/auth/AuthForm';
+import { EmailToTicketDemo } from '../features/auth/EmailToTicketDemo';
 import { useAuth } from '../features/auth/context';
 import { InviteForm } from '../features/auth/InviteForm';
 import { ForgotPasswordForm, ResetPasswordForm } from '../features/auth/PasswordResetForms';
 
-const STEPS = ['Create workspace', 'Import email', 'AI drafts', 'You approve'];
+const STEPS = [
+  { name: 'Create workspace', line: "Sign up and name your team's helpdesk." },
+  { name: 'Import email', line: 'Connect Gmail or forward mail to your Triago address.' },
+  { name: 'AI drafts', line: 'Each email becomes a ticket with a title, type and priority.' },
+  { name: 'You approve', line: 'Accept, edit or close each draft, then reply from the ticket.' }
+];
 
 /** The signed-out pages share the starry hero on the left; the right side changes. */
-function AuthShell({ children, nav }: { children: ReactNode; nav?: ReactNode }) {
+function AuthShell({ children, nav, aside }: { children: ReactNode; nav?: ReactNode; aside?: ReactNode }) {
   return (
-    <div className="page-shell auth-space" data-theme="dark">
+    <div className={`page-shell auth-space ${aside ? 'is-landing' : ''}`} data-theme="dark">
       <SpaceBackground />
       {nav && <nav className="landing-nav">{nav}</nav>}
       <div className="register-shell">
@@ -30,17 +36,21 @@ function AuthShell({ children, nav }: { children: ReactNode; nav?: ReactNode }) 
               holds it for your team to approve. The AI suggests; people decide.
             </p>
           </div>
-          <div className="step-grid">
+          <ol className="step-grid">
             {STEPS.map((step, index) => (
-              <div key={step} className={`step-card ${index === 0 ? 'is-current' : ''}`}>
+              <li key={step.name} className="step-card">
                 <span className="step-number">{String(index + 1).padStart(2, '0')}</span>
-                <span className="step-name">{step}</span>
-              </div>
+                <span className="step-name">{step.name}</span>
+                <span className="step-line">{step.line}</span>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
 
-        <div className="register-panel">{children}</div>
+        <div className="register-panel">
+          {aside}
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -65,6 +75,7 @@ export function LandingPage() {
 
   return (
     <AuthShell
+      aside={<EmailToTicketDemo />}
       nav={
         <>
           <Link to="/login" className="landing-link">
@@ -85,7 +96,7 @@ export function LandingPage() {
           <Corners />
           Create workspace
         </Link>
-        <button type="button" className="btn btn-secondary btn-block" disabled={busy} onClick={tryDemo}>
+        <button type="button" className="btn btn-outline btn-block" disabled={busy} onClick={tryDemo}>
           {busy ? 'Starting the demo…' : 'Try the demo, no sign-up'}
         </button>
         {error && (
