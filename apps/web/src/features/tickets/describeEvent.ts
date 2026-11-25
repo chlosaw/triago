@@ -71,6 +71,10 @@ export function describeEvent(event: TicketEvent, members: Member[]): string {
     }
     case 'replied':
       return data.sent === false ? 'wrote a reply (demo: not emailed)' : 'emailed a reply to the customer';
+    case 'customer_replied':
+      return data.reopenedFrom
+        ? `got a reply from the customer and moved it back to In progress (was ${OPTION_LABELS[String(data.reopenedFrom)] ?? data.reopenedFrom})`
+        : 'got a reply from the customer';
     case 'note_added':
       return 'added a note';
     case 'note_deleted':

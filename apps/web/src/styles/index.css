@@ -4554,392 +4554,6 @@ select.input {
   min-width: 150px;
 }
 
-/* --- Replies to the customer ------------------------------------------- */
-.conversation-panel .message-outbound {
-  border-left: 3px solid var(--color-accent);
-}
-
-/* --- Landing: a calm background ----------------------------------------- */
-/* The page grows with its content (min-height, not height), so clipping only trims the decorative glow. */
-.auth-space {
-  overflow: clip;
-}
-/* Stars stay still and faint; only the few icons below move. */
-.space-stars {
-  animation: none;
-}
-.space-stars-field {
-  opacity: 0.45;
-}
-.space-icon {
-  position: absolute;
-  fill: none;
-  stroke: #fff;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.15;
-  transform: translate(-50%, -50%);
-}
-/* Slow drift for people who haven't asked their system for reduced motion. Transform and opacity only. */
-@media (prefers-reduced-motion: no-preference) {
-  .space-icon {
-    animation: space-drift var(--drift-duration, 28s) ease-in-out var(--drift-delay, 0s) infinite alternate;
-  }
-}
-@keyframes space-drift {
-  from {
-    opacity: 0.11;
-    transform: translate(-50%, -50%) translate3d(-10px, 8px, 0) rotate(-6deg);
-  }
-  to {
-    opacity: 0.19;
-    transform: translate(-50%, -50%) translate3d(12px, -10px, 0) rotate(6deg);
-  }
-}
-/* When the columns stack there is no empty space to drift in, so the icons go. */
-@media (max-width: 1100px) {
-  .space-icon {
-    display: none;
-  }
-}
-
-/* --- Landing: layout, steps and the demo button ------------------------- */
-.is-landing .register-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-}
-.is-landing .register-panel > * {
-  width: min(100%, 440px);
-}
-.step-grid {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.step-card {
-  gap: 6px;
-}
-.auth-space .step-line {
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 13px;
-  line-height: 1.45;
-}
-@media (max-width: 1240px) {
-  .step-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .step-card:nth-child(2n) {
-    border-right: 0;
-  }
-  .step-card:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--color-divider);
-  }
-}
-@media (max-width: 720px) {
-  .step-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-  .step-card,
-  .step-card:nth-child(2n) {
-    border-right: 0;
-    border-bottom: 1px solid var(--color-divider);
-  }
-  .step-card:last-child {
-    border-bottom: 0;
-  }
-}
-/* "Try the demo": the button recruiters need, so it gets a clear outline on the black page. */
-.btn.btn-outline {
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background: transparent;
-  color: #fff;
-}
-.btn.btn-outline:hover:not(:disabled) {
-  border-color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-}
-.btn.btn-outline:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 2px;
-}
-
-/* --- Landing: the email-to-ticket loop ---------------------------------- */
-.e2t {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  margin: 0;
-  color: #fff;
-  font-size: 13px;
-}
-.e2t-email,
-.e2t-ticket {
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
-  background: rgba(16, 17, 20, 0.92);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-}
-.e2t-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.e2t-from span {
-  color: rgba(255, 255, 255, 0.55);
-}
-.e2t-subject {
-  margin-top: 2px;
-  font-weight: 600;
-}
-.e2t-body,
-.e2t-summary {
-  margin: 6px 0 0;
-  color: rgba(255, 255, 255, 0.72);
-  line-height: 1.5;
-}
-.e2t-arrow {
-  display: flex;
-  justify-content: center;
-}
-.e2t-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border: 1px solid rgba(87, 157, 255, 0.55);
-  border-radius: 999px;
-  background: rgba(87, 157, 255, 0.14);
-  color: #cfe1ff;
-  font-size: 12px;
-}
-.e2t-ticket {
-  border-color: rgba(87, 157, 255, 0.45);
-}
-.e2t-ticket-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.e2t-key {
-  color: rgba(255, 255, 255, 0.6);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 12px;
-}
-.e2t-tag {
-  padding: 1px 8px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 600;
-}
-.e2t-billing {
-  background: rgba(159, 143, 239, 0.22);
-  color: #d6ceff;
-}
-.e2t-urgent {
-  background: rgba(248, 113, 104, 0.22);
-  color: #ffc2bd;
-}
-.e2t-confidence {
-  margin-left: auto;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
-}
-.e2t-title {
-  margin-top: 8px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.e2t-actions {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-.e2t-accept,
-.e2t-edit {
-  padding: 4px 12px;
-  border-radius: 3px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.e2t-accept {
-  background: #579dff;
-  color: #10131a;
-}
-.e2t-edit {
-  background: rgba(255, 255, 255, 0.1);
-}
-/* In the still picture the decision is left open; the loop shows it being made. */
-.e2t-approved {
-  position: absolute;
-  left: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #7ee2a8;
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0;
-}
-/* A 10-second loop: email arrives, AI drafts, ticket appears, a person approves, repeat. */
-@media (prefers-reduced-motion: no-preference) {
-  .e2t-email {
-    animation: e2t-email 10s ease-in-out infinite;
-  }
-  .e2t-chip {
-    animation: e2t-chip 10s ease-in-out infinite;
-  }
-  .e2t-ticket {
-    animation: e2t-ticket 10s ease-in-out infinite;
-  }
-  .e2t-accept {
-    animation: e2t-press 10s ease-in-out infinite;
-  }
-  .e2t-edit {
-    animation: e2t-buttons-out 10s ease-in-out infinite;
-  }
-  .e2t-approved {
-    animation: e2t-approved 10s ease-in-out infinite;
-  }
-}
-@keyframes e2t-email {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 10px, 0);
-  }
-  6%,
-  90% {
-    opacity: 1;
-    transform: none;
-  }
-  100% {
-    opacity: 0;
-    transform: none;
-  }
-}
-@keyframes e2t-chip {
-  0%,
-  16% {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  22%,
-  90% {
-    opacity: 1;
-    transform: none;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes e2t-ticket {
-  0%,
-  30% {
-    opacity: 0;
-    transform: translate3d(0, 14px, 0) scale(0.98);
-  }
-  38%,
-  90% {
-    opacity: 1;
-    transform: none;
-  }
-  100% {
-    opacity: 0;
-    transform: none;
-  }
-}
-@keyframes e2t-press {
-  0%,
-  58% {
-    opacity: 1;
-    transform: none;
-  }
-  61% {
-    opacity: 1;
-    transform: scale(0.92);
-  }
-  64%,
-  100% {
-    opacity: 0;
-    transform: none;
-  }
-}
-@keyframes e2t-buttons-out {
-  0%,
-  60% {
-    opacity: 1;
-  }
-  64%,
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes e2t-approved {
-  0%,
-  63% {
-    opacity: 0;
-    transform: translate3d(-4px, 0, 0);
-  }
-  67%,
-  90% {
-    opacity: 1;
-    transform: none;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-/* --- Landing: headline beside the demo; on phones the buttons come first -- */
-.is-landing .register-copy-inner {
-  margin-block: auto;
-}
-@media (max-width: 980px) {
-  .is-landing .register-shell {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    padding: 24px 16px 32px;
-  }
-  .is-landing .register-copy,
-  .is-landing .register-panel {
-    display: contents;
-  }
-  .is-landing .brand-wrap-left {
-    order: 0;
-  }
-  .is-landing .register-copy-inner {
-    order: 1;
-    margin: 0;
-  }
-  .is-landing .get-started {
-    order: 2;
-  }
-  .is-landing .e2t {
-    order: 3;
-  }
-  .is-landing .step-grid {
-    order: 4;
-  }
-  .is-landing .register-panel > * {
-    width: 100%;
-  }
-}
-
 /* --- Landing: a calm background ----------------------------------------- */
 /* The page grows with its content (min-height, not height), so clipping only trims the decorative glow. */
 .auth-space {
@@ -5439,6 +5053,125 @@ select.input {
   .my-table .my-row > :not(.my-title-cell):not(:nth-child(4)) {
     display: none;
   }
+}
+
+/* --- Ticket: details panel ---------------------------------------------- */
+@container (min-width: 820px) {
+  .issue-grid {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+.details-list {
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.details-list dt {
+  padding-top: 8px;
+}
+.details-select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.details-list .lozenge-large {
+  margin-top: 2px;
+}
+.add-toggle {
+  align-self: flex-start;
+}
+
+/* --- Ticket: the conversation with the customer ------------------------- */
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.thread-message {
+  padding: 12px 16px;
+  border: 1px solid var(--color-divider);
+  border-radius: 3px;
+  background: var(--color-surface);
+}
+.thread-message.is-agent {
+  border-left: 3px solid var(--brand);
+  background: transparent;
+}
+.thread-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.thread-meta time {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+.thread-body,
+.reply-draft-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+.next-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.reply-start,
+.reply-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.reply-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px dashed color-mix(in srgb, var(--brand) 60%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--brand) 6%, transparent);
+}
+.reply-draft-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.reply-draft-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand);
+  font-weight: 600;
+}
+.reply-draft-body {
+  margin: 0;
+}
+.reply-draft-body.is-loading {
+  color: var(--color-muted);
+}
+.reply-draft-note,
+.reply-notice {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+.reply-textarea {
+  min-height: 140px;
 }
 
 /* --- Landing: headline beside the demo; on phones the buttons come first -- */

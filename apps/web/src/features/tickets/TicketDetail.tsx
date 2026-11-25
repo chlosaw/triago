@@ -5,6 +5,7 @@ import { Avatar, CategoryIcon, PriorityIcon } from '../../components/Icons';
 import { Markdown } from '../../components/Markdown';
 import { ErrorState } from '../../components/QueryState';
 import { RichTextEditor } from '../../components/RichTextEditor';
+import { formatDateTime, formatRelative } from '../../lib/dates';
 import { CATEGORY_OPTIONS, MANUAL_TRIAGE, PRIORITY_OPTIONS, percent } from '../../lib/labels';
 import { useProfile } from '../auth/context';
 import { ActivityTimeline } from './ActivityTimeline';
@@ -19,10 +20,8 @@ import { StatusSelect } from './StatusSelect';
 /** A ticket laid out like an issue view: the work on the left, the details on the right. */
 export function TicketDetail({ ticket }: { ticket: Ticket }) {
   const detail = useTicket(ticket.id);
-  const sourceEmail = detail.data?.messages.find((message) => message.kind === 'inbound');
   const notes = detail.data?.messages.filter((message) => message.kind === 'note') ?? [];
-  const thread =
-    detail.data?.messages.filter((message) => message.kind !== 'note' && message.id !== sourceEmail?.id) ?? [];
+  const thread = detail.data?.messages.filter((message) => message.kind !== 'note') ?? [];
   const isDraft = ticket.status === 'new' && ticket.source === 'email';
 
   return (
@@ -44,29 +43,13 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
         <div className="issue-main">
           {detail.isError && <ErrorState message={detail.error.message} onRetry={() => detail.refetch()} />}
 
+          {/* A draft is judged against the email, so the email comes first; afterwards the description leads. */}
+          {!isDraft && <DescriptionSection ticket={ticket} />}
           {ticket.source === 'email' && (
-            <section className="issue-section">
-              <h4>
-                Email from {ticket.requester.name || ticket.requester.email}
-                {ticket.requester.email && ticket.requester.name && (
-                  <span className="muted"> &lt;{ticket.requester.email}&gt;</span>
-                )}
-              </h4>
-              {detail.isPending ? (
-                <div className="state-box" role="status">
-                  Loading email…
-                </div>
-              ) : (
-                sourceEmail && <div className="email-body">{sourceEmail.body}</div>
-              )}
-            </section>
+            <ConversationPanel ticket={ticket} messages={thread} loading={detail.isPending} canReply={!isDraft} />
           )}
+          {isDraft && <DraftEditor ticket={ticket} />}
 
-          {isDraft ? <DraftEditor ticket={ticket} /> : <DescriptionSection ticket={ticket} />}
-
-          {detail.data && !isDraft && ticket.source === 'email' && (
-            <ConversationPanel ticket={ticket} messages={thread} />
-          )}
           <LinksPanel ticket={ticket} />
           {detail.data && <AttachmentsPanel ticketId={ticket.id} attachments={detail.data.attachments} />}
           {detail.data && <NotesPanel ticketId={ticket.id} notes={notes} />}
@@ -74,7 +57,6 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
         </div>
 
         <aside className="issue-aside" aria-label="Details">
-          <StatusSelect ticket={ticket} className="lozenge-large" />
           <DetailsBox ticket={ticket} />
         </aside>
       </div>
@@ -209,6 +191,11 @@ function DetailsBox({ ticket }: { ticket: Ticket }) {
     <div className="details-box">
       <h4>Details</h4>
       <dl className="details-list">
+        <dt>Status</dt>
+        <dd>
+          <StatusSelect ticket={ticket} className="lozenge-large" />
+        </dd>
+
         <dt>Assignee</dt>
         <dd>
           <AssigneeSelect ticket={ticket} className="input details-select" />
@@ -288,10 +275,10 @@ function DetailsBox({ ticket }: { ticket: Ticket }) {
         <dd>{ticket.source === 'email' ? 'Email' : 'Created in Triago'}</dd>
 
         <dt>Created</dt>
-        <dd>{new Date(ticket.receivedAt).toLocaleString()}</dd>
+        <dd title={formatRelative(ticket.receivedAt)}>{formatDateTime(ticket.receivedAt)}</dd>
 
         <dt>Updated</dt>
-        <dd>{new Date(ticket.updatedAt).toLocaleString()}</dd>
+        <dd title={formatRelative(ticket.updatedAt)}>{formatDateTime(ticket.updatedAt)}</dd>
       </dl>
       {update.error && <ErrorState message={update.error.message} />}
     </div>
@@ -370,6 +357,7 @@ function LinksPanel({ ticket }: { ticket: Ticket }) {
       </div>
       <LinksEditor
         links={ticket.links}
+        collapsed
         disabled={update.isPending}
         onChange={(links) => update.mutate({ id: ticket.id, patch: { links } })}
       />

@@ -4,11 +4,14 @@ import { useNoteActions } from '../../api/queries';
 import { GrammarButton } from './GrammarButton';
 import { ErrorState } from '../../components/QueryState';
 import { useProfile } from '../auth/context';
+import { formatDateTime, formatRelative } from '../../lib/dates';
 
 /** Internal notes on a ticket: only the team sees them. */
 export function NotesPanel({ ticketId, notes }: { ticketId: string; notes: Message[] }) {
   const { add } = useNoteActions(ticketId);
   const headingId = useId();
+  // The note box stays folded away until someone wants to write.
+  const [writing, setWriting] = useState(false);
 
   return (
     <section className="notes-panel" aria-labelledby={headingId}>
@@ -16,7 +19,7 @@ export function NotesPanel({ ticketId, notes }: { ticketId: string; notes: Messa
         Internal notes {notes.length > 0 && `· ${notes.length}`}
       </h4>
       {notes.length === 0 ? (
-        <p className="notes-empty">No notes yet. Notes are only visible to your team.</p>
+        !writing && <p className="notes-empty">No notes yet. Notes are only visible to your team.</p>
       ) : (
         <ul className="notes-list">
           {notes.map((note) => (
@@ -24,12 +27,27 @@ export function NotesPanel({ ticketId, notes }: { ticketId: string; notes: Messa
           ))}
         </ul>
       )}
-      <NoteForm
-        submitLabel="Add note"
-        pending={add.isPending}
-        serverError={add.error?.message}
-        onSubmit={(body, reset) => add.mutate(body, { onSuccess: reset })}
-      />
+      {writing ? (
+        <NoteForm
+          submitLabel="Add note"
+          pending={add.isPending}
+          serverError={add.error?.message}
+          autoFocus
+          onCancel={() => setWriting(false)}
+          onSubmit={(body, reset) =>
+            add.mutate(body, {
+              onSuccess: () => {
+                reset();
+                setWriting(false);
+              }
+            })
+          }
+        />
+      ) : (
+        <button type="button" className="btn btn-subtle btn-small add-toggle" onClick={() => setWriting(true)}>
+          + Add note
+        </button>
+      )}
     </section>
   );
 }
@@ -60,7 +78,9 @@ function NoteItem({ ticketId, note }: { ticketId: string; note: Message }) {
     <li className="note-item">
       <div className="note-meta">
         <span>{note.fromName || 'Former member'}</span>
-        <time dateTime={note.createdAt}>{new Date(note.createdAt).toLocaleString()}</time>
+        <time dateTime={note.createdAt} title={formatRelative(note.createdAt)}>
+          {formatDateTime(note.createdAt)}
+        </time>
         {note.editedAt && <span>(edited)</span>}
       </div>
       <p className="note-body">{note.body}</p>
@@ -97,10 +117,19 @@ interface NoteFormProps {
   serverError?: string;
   onSubmit: (body: string, reset: () => void) => void;
   onCancel?: () => void;
+  autoFocus?: boolean;
 }
 
 /** Textarea validated with the same schema the API uses. */
-export function NoteForm({ initial = '', submitLabel, pending, serverError, onSubmit, onCancel }: NoteFormProps) {
+export function NoteForm({
+  initial = '',
+  submitLabel,
+  pending,
+  serverError,
+  onSubmit,
+  onCancel,
+  autoFocus
+}: NoteFormProps) {
   const [body, setBody] = useState(initial);
   const [error, setError] = useState('');
   const id = useId();
@@ -128,6 +157,7 @@ export function NoteForm({ initial = '', submitLabel, pending, serverError, onSu
         className="input textarea-input"
         placeholder="Add context for your team…"
         value={body}
+        autoFocus={autoFocus}
         aria-invalid={shownError ? true : undefined}
         aria-describedby={shownError ? errorId : undefined}
         onChange={(event) => {
@@ -142,11 +172,11 @@ export function NoteForm({ initial = '', submitLabel, pending, serverError, onSu
         </span>
       )}
       <div className="note-form-actions">
-        <button type="submit" className="btn btn-ghost" disabled={pending}>
+        <button type="submit" className="btn btn-primary" disabled={pending}>
           {pending ? 'Saving…' : submitLabel}
         </button>
         {onCancel && (
-          <button type="button" className="link-btn" onClick={onCancel}>
+          <button type="button" className="btn btn-subtle" onClick={onCancel}>
             Cancel
           </button>
         )}

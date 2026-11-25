@@ -18,6 +18,7 @@ import type {
   Organisation,
   OrgSettings,
   Priority,
+  ReplyDraft,
   ReplyResult,
   Stats,
   StatsRange,
@@ -242,6 +243,21 @@ export function useNoteActions(ticketId: string) {
       onSuccess
     })
   };
+}
+
+/**
+ * A suggested reply for the latest customer message. Keyed by that message, so a
+ * new email gets a fresh draft, but edits elsewhere on the ticket never re-ask the AI.
+ */
+export function useReplyDraft(ticketId: string, lastMessageId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['reply-draft', ticketId, lastMessageId],
+    queryFn: () => api<ReplyDraft>(`/tickets/${ticketId}/reply-draft`, { method: 'POST' }),
+    enabled,
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+    retry: false
+  });
 }
 
 /** Emails a reply to the ticket's requester; the reply then shows in the conversation. */

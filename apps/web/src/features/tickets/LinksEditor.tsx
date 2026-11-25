@@ -14,12 +14,16 @@ function linkHost(url: string): string {
 export function LinksEditor({
   links,
   onChange,
-  disabled
+  disabled,
+  collapsed = false
 }: {
   links: TicketLink[];
   onChange: (links: TicketLink[]) => void;
   disabled?: boolean;
+  /** Hide the add-link inputs behind a "+ Add link" button until it is clicked. */
+  collapsed?: boolean;
 }) {
+  const [open, setOpen] = useState(!collapsed);
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [error, setError] = useState('');
@@ -41,6 +45,7 @@ export function LinksEditor({
     setUrl('');
     setTitle('');
     setError('');
+    if (collapsed) setOpen(false);
   };
 
   // Enter adds the link instead of submitting the surrounding form.
@@ -75,7 +80,12 @@ export function LinksEditor({
           ))}
         </ul>
       )}
-      {!disabled && (
+      {!disabled && !open && (
+        <button type="button" className="btn btn-subtle btn-small add-toggle" onClick={() => setOpen(true)}>
+          + Add link
+        </button>
+      )}
+      {!disabled && open && (
         <div className="link-add-row">
           <label className="visually-hidden" htmlFor={`${id}-url`}>
             Link URL
@@ -93,6 +103,7 @@ export function LinksEditor({
               setError('');
             }}
             onKeyDown={onKeyDown}
+            autoFocus={collapsed}
           />
           <label className="visually-hidden" htmlFor={`${id}-title`}>
             Link text
@@ -109,6 +120,20 @@ export function LinksEditor({
           <button type="button" className="btn btn-secondary" disabled={!url.trim()} onClick={() => add()}>
             Add link
           </button>
+          {collapsed && (
+            <button
+              type="button"
+              className="btn btn-subtle"
+              onClick={() => {
+                setOpen(false);
+                setUrl('');
+                setTitle('');
+                setError('');
+              }}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       )}
       {error && (
