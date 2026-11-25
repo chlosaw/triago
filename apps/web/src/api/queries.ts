@@ -35,6 +35,10 @@ interface TicketFilter {
   q?: string;
   /** "me" for the signed-in member. */
   assignee?: 'me';
+  /** Only these priorities; omitted or empty means every priority. */
+  priorities?: readonly Priority[];
+  /** Received at or after this instant (ISO 8601). */
+  from?: string;
   limit?: number;
 }
 
@@ -43,6 +47,8 @@ function ticketsUrl(statuses: readonly Status[], sort: TicketSort, cursor: strin
   if (cursor) params.set('cursor', cursor);
   if (filter.q?.trim()) params.set('q', filter.q.trim());
   if (filter.assignee) params.set('assignee', filter.assignee);
+  if (filter.priorities?.length) params.set('priority', filter.priorities.join(','));
+  if (filter.from) params.set('from', filter.from);
   return `/tickets?${params}`;
 }
 
@@ -60,7 +66,16 @@ export function useTicketPages(
       query.state.data?.pages.some((page) => page.tickets.some((ticket) => ticket.manualTriage === 'drafting'))
         ? 4_000
         : refetchInterval,
-    queryKey: ['tickets', statuses, sort, filter.q?.trim() ?? '', filter.assignee ?? null, filter.limit ?? 25],
+    queryKey: [
+      'tickets',
+      statuses,
+      sort,
+      filter.q?.trim() ?? '',
+      filter.assignee ?? null,
+      filter.priorities ?? [],
+      filter.from ?? null,
+      filter.limit ?? 25
+    ],
     queryFn: ({ pageParam }) => api<TicketPage>(ticketsUrl(statuses, sort, pageParam, filter)),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,

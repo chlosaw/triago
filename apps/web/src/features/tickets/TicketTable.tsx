@@ -4,11 +4,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useOrg, useTicketActions, useTicketPages } from '../../api/queries';
 import { Avatar, CategoryIcon, PriorityIcon } from '../../components/Icons';
 import { ErrorState, QueryState } from '../../components/QueryState';
-import { CATEGORY_OPTIONS, priorityLabel, STATUS_OPTIONS } from '../../lib/labels';
+import { CATEGORY_OPTIONS, PRIORITY_OPTIONS, priorityLabel, STATUS_OPTIONS } from '../../lib/labels';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
 import { useProfile } from '../auth/context';
 import { TriageBadge } from './TicketBadges';
 import { StatusSelect } from './StatusSelect';
+
+/** Date filter choices: how far back the received date may go. */
+const RECEIVED_OPTIONS = [
+  { value: 'any', label: 'Any time', hours: null },
+  { value: 'day', label: 'Last 24 hours', hours: 24 },
+  { value: 'week', label: 'Last 7 days', hours: 24 * 7 },
+  { value: 'month', label: 'Last 30 days', hours: 24 * 30 }
+] as const;
+type Received = (typeof RECEIVED_OPTIONS)[number]['value'];
 
 const typeLabel = (ticket: Ticket) =>
   CATEGORY_OPTIONS.find((c) => c.value === ticket.category)?.label ?? ticket.category;
@@ -25,7 +34,12 @@ export function TicketTable({
 }) {
   const [search, setSearch] = useState('');
   const q = useDebouncedValue(search, 300);
-  const tickets = useTicketPages(statuses, 'received', { q, assignee, limit: 50 });
+  const [priority, setPriority] = useState<Priority | 'any'>('any');
+  // The cut-off is fixed when the filter is picked, so the list doesn't refetch every render.
+  const [received, setReceived] = useState<{ value: Received; from?: string }>({ value: 'any' });
+  const priorities = priority === 'any' ? undefined : [priority];
+  const tickets = useTicketPages(statuses, 'received', { q, assignee, priorities, from: received.from, limit: 50 });
+  const filtered = Boolean(q.trim() || priorities || received.from);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const list = tickets.data ?? [];
@@ -55,6 +69,50 @@ export function TicketTable({
           maxLength={200}
           onChange={(event) => setSearch(event.target.value)}
         />
+        <select
+          className="input table-filter"
+          aria-label="Filter by priority"
+          value={priority}
+          onChange={(event) => setPriority(event.target.value as Priority | 'any')}
+        >
+          <option value="any">All priorities</option>
+          {[...PRIORITY_OPTIONS].reverse().map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className="input table-filter"
+          aria-label="Filter by date received"
+          value={received.value}
+          onChange={(event) => {
+            const option = RECEIVED_OPTIONS.find((o) => o.value === event.target.value)!;
+            setReceived({
+              value: option.value,
+              from: option.hours ? new Date(Date.now() - option.hours * 3_600_000).toISOString() : undefined
+            });
+          }}
+        >
+          {RECEIVED_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        {filtered && (
+          <button
+            type="button"
+            className="btn btn-subtle"
+            onClick={() => {
+              setSearch('');
+              setPriority('any');
+              setReceived({ value: 'any' });
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {visibleSelected.length > 0 && <BulkBar tickets={visibleSelected} onDone={() => setSelected(new Set())} />}
@@ -63,7 +121,7 @@ export function TicketTable({
         query={tickets}
         loadingLabel="Loading tickets…"
         isEmpty={(rows) => rows.length === 0}
-        empty={q.trim() ? `No tickets match “${q.trim()}”.` : empty}
+        empty={q.trim() ? `No tickets match “${q.trim()}”.` : filtered ? 'No tickets match these filters.' : empty}
       >
         {(rows) => (
           <div className="table-scroll">

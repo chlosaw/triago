@@ -66,7 +66,17 @@ const ORDER_BY: Record<Sort, Prisma.TicketOrderByWithRelationInput[]> = {
  */
 export async function listTickets(
   orgId: string,
-  options: { statuses: Status[]; sort: Sort; limit: number; cursor?: string; q?: string; assigneeId?: string }
+  options: {
+    statuses: Status[];
+    sort: Sort;
+    limit: number;
+    cursor?: string;
+    q?: string;
+    assigneeId?: string;
+    priorities?: Priority[];
+    receivedFrom?: Date;
+    receivedTo?: Date;
+  }
 ): Promise<TicketPage> {
   // The cursor must be one of this organisation's tickets; any other id is refused, not just ignored.
   if (options.cursor && !(await prisma.ticket.count({ where: { orgId, id: options.cursor } }))) {
@@ -77,6 +87,10 @@ export async function listTickets(
       orgId,
       status: { in: options.statuses },
       ...(options.assigneeId ? { assigneeId: options.assigneeId } : {}),
+      ...(options.priorities ? { priority: { in: options.priorities } } : {}),
+      ...(options.receivedFrom || options.receivedTo
+        ? { receivedAt: { gte: options.receivedFrom, lte: options.receivedTo } }
+        : {}),
       ...(options.q ? searchFilter(options.q) : {})
     },
     orderBy: ORDER_BY[options.sort],

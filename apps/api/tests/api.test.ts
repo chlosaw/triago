@@ -373,6 +373,39 @@ describe('ticket list', () => {
     const { token } = await signUp();
     await request(app).get('/api/tickets?cursor=not-a-cursor').set(auth(token)).expect(400);
   });
+
+  it('filters by priority and by date received', async () => {
+    const { token } = await signUp();
+    const make = async (title: string, priority: string, daysAgo: number) => {
+      const { body } = await request(app).post('/api/tickets').set(auth(token)).send({ title, priority }).expect(201);
+      await prisma.ticket.update({
+        where: { id: body.ticket.id },
+        data: { receivedAt: new Date(Date.now() - daysAgo * 86_400_000) }
+      });
+    };
+    await make('Old urgent', 'urgent', 40);
+    await make('Recent high', 'high', 2);
+    await make('Recent low', 'low', 1);
+
+    const titles = async (query: Record<string, string>) =>
+      (await request(app).get('/api/tickets').query(query).set(auth(token)).expect(200)).body.tickets.map(
+        (t: { title: string }) => t.title
+      );
+    const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+
+    expect(await titles({ priority: 'high,urgent' })).toEqual(['Recent high', 'Old urgent']);
+    expect(await titles({ from: daysAgo(7) })).toEqual(['Recent low', 'Recent high']);
+    expect(await titles({ from: daysAgo(30), priority: 'urgent' })).toEqual([]);
+    expect(await titles({ from: daysAgo(60), to: daysAgo(30) })).toEqual(['Old urgent']);
+
+    await request(app).get('/api/tickets?priority=critical').set(auth(token)).expect(400);
+    await request(app).get('/api/tickets?from=yesterday').set(auth(token)).expect(400);
+    await request(app)
+      .get('/api/tickets')
+      .query({ from: daysAgo(1), to: daysAgo(2) })
+      .set(auth(token))
+      .expect(400);
+  });
 });
 
 describe('roles', () => {

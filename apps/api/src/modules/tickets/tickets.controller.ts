@@ -9,9 +9,21 @@ import * as tickets from './tickets.service.js';
 
 export async function list(req: Request, res: Response) {
   const auth = getAuth(req);
-  const { status, assignee, ...options } = ListQuery.parse(req.query);
+  const { status, assignee, priority, from, to, ...options } = ListQuery.parse(req.query);
   const assigneeId = assignee === 'me' ? auth.userId : assignee;
-  res.json(await tickets.listTickets(auth.orgId, { statuses: status, assigneeId, ...options }));
+  if (from && to && new Date(from) > new Date(to)) {
+    throw new HttpError(400, 'VALIDATION_FAILED', 'The start date is after the end date.', { from: 'After "to"' });
+  }
+  res.json(
+    await tickets.listTickets(auth.orgId, {
+      statuses: status,
+      priorities: priority,
+      receivedFrom: from ? new Date(from) : undefined,
+      receivedTo: to ? new Date(to) : undefined,
+      assigneeId,
+      ...options
+    })
+  );
 }
 
 export async function create(req: Request, res: Response) {

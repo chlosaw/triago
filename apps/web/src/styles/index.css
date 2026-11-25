@@ -4543,3 +4543,13 @@ select.input {
     right: 16px;
   }
 }
+
+/* --- Ticket filters ----------------------------------------------------- */
+.table-toolbar {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.table-filter {
+  width: auto;
+  min-width: 150px;
+}
