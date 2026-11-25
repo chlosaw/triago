@@ -5320,3 +5320,15 @@ select.input {
     width: 100%;
   }
 }
+
+/* --- Queue: the list stays in view while a long draft scrolls ------------ */
+@media (min-width: 721px) {
+  .queue-list-panel {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+}
