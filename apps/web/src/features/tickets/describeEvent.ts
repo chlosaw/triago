@@ -69,6 +69,8 @@ export function describeEvent(event: TicketEvent, members: Member[]): string {
       if (field === 'title' || field === 'summary') return `edited the ${field}`;
       return `changed ${FIELD_NAMES[field] ?? field} from ${value(field, change.from)} to ${value(field, change.to)}`;
     }
+    case 'replied':
+      return data.sent === false ? 'wrote a reply (demo: not emailed)' : 'emailed a reply to the customer';
     case 'note_added':
       return 'added a note';
     case 'note_deleted':

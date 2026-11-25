@@ -28,7 +28,7 @@ const mail = { to: 'sam@acme.test', subject: 'Reset your Triago password', text:
 describe('sending email through Resend', () => {
   it('sends a plain-text email from MAIL_FROM', async () => {
     send.mockResolvedValue({ data: { id: 'email_1' }, error: null });
-    await sendMail(mail);
+    await expect(sendMail(mail)).resolves.toBe(true);
     expect(send).toHaveBeenCalledWith({
       from: 'Triago <no-reply@triago.test>',
       to: 'sam@acme.test',
@@ -40,7 +40,7 @@ describe('sending email through Resend', () => {
   it('logs an error Resend returns, without throwing', async () => {
     send.mockResolvedValue({ data: null, error: { name: 'validation_error', message: 'Domain not verified' } });
     const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
-    await expect(sendMail(mail)).resolves.toBeUndefined();
+    await expect(sendMail(mail)).resolves.toBe(false);
     expect(error).toHaveBeenCalledWith(
       { resendError: 'validation_error', message: 'Domain not verified' },
       'Resend refused an email'
@@ -51,7 +51,7 @@ describe('sending email through Resend', () => {
   it('logs a network failure, without throwing', async () => {
     send.mockRejectedValue(new Error('ECONNRESET'));
     const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
-    await expect(sendMail(mail)).resolves.toBeUndefined();
+    await expect(sendMail(mail)).resolves.toBe(false);
     expect(error).toHaveBeenCalledWith(expect.objectContaining({ err: expect.any(Error) }), 'Could not reach Resend');
     error.mockRestore();
   });

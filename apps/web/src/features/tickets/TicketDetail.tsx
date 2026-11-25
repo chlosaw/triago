@@ -10,6 +10,7 @@ import { useProfile } from '../auth/context';
 import { ActivityTimeline } from './ActivityTimeline';
 import { AssigneeSelect } from './AssigneeSelect';
 import { AttachmentsPanel } from './AttachmentsPanel';
+import { ConversationPanel } from './ConversationPanel';
 import { GrammarButton } from './GrammarButton';
 import { LinksEditor } from './LinksEditor';
 import { NotesPanel } from './NotesPanel';
@@ -20,6 +21,8 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
   const detail = useTicket(ticket.id);
   const sourceEmail = detail.data?.messages.find((message) => message.kind === 'inbound');
   const notes = detail.data?.messages.filter((message) => message.kind === 'note') ?? [];
+  const thread =
+    detail.data?.messages.filter((message) => message.kind !== 'note' && message.id !== sourceEmail?.id) ?? [];
   const isDraft = ticket.status === 'new' && ticket.source === 'email';
 
   return (
@@ -61,6 +64,9 @@ export function TicketDetail({ ticket }: { ticket: Ticket }) {
 
           {isDraft ? <DraftEditor ticket={ticket} /> : <DescriptionSection ticket={ticket} />}
 
+          {detail.data && !isDraft && ticket.source === 'email' && (
+            <ConversationPanel ticket={ticket} messages={thread} />
+          )}
           <LinksPanel ticket={ticket} />
           {detail.data && <AttachmentsPanel ticketId={ticket.id} attachments={detail.data.attachments} />}
           {detail.data && <NotesPanel ticketId={ticket.id} notes={notes} />}

@@ -74,6 +74,18 @@ export const NoteBody = z.object({
 });
 export type NoteBody = z.infer<typeof NoteBody>;
 
+/** An email reply to the ticket's requester. */
+export const ReplyBody = z.object({
+  body: z.string().trim().min(1, 'Write a reply first.').max(10000, 'Keep replies under 10000 characters.')
+});
+export type ReplyBody = z.infer<typeof ReplyBody>;
+
+export interface ReplyResult {
+  reply: Message;
+  /** False in the demo, where replies are saved but no email leaves the app. */
+  sent: boolean;
+}
+
 /**
  * Why a ticket needs a person to triage it by hand:
  * - `drafting`: saved, the AI draft is still running in the background.
@@ -126,7 +138,7 @@ export interface Message {
   fromName: string;
   fromEmail: string | null;
   body: string;
-  /** The agent who wrote a note; null for emails. */
+  /** The agent who wrote a note or an outbound reply; null for the customer's emails. */
   authorId: string | null;
   createdAt: string;
   editedAt: string | null;

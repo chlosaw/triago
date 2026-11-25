@@ -1,5 +1,6 @@
 import express, { Router } from 'express';
-import { requireRole } from '../../middleware/auth.js';
+import { getAuth, requireRole } from '../../middleware/auth.js';
+import { limiter } from '../../middleware/security.js';
 import * as controller from './tickets.controller.js';
 
 export const ticketsRouter = Router();
@@ -13,6 +14,10 @@ ticketsRouter.post('/:id/accept', controller.accept);
 ticketsRouter.post('/:id/dismiss', controller.dismiss);
 ticketsRouter.post('/:id/return-to-queue', controller.returnToQueue);
 ticketsRouter.delete('/:id', requireRole('admin'), controller.remove);
+
+// Each reply emails a customer, so cap them per organisation.
+const replyLimiter = limiter({ name: 'reply', windowMinutes: 10, limit: 60, key: (req) => getAuth(req).orgId });
+ticketsRouter.post('/:id/replies', replyLimiter, controller.reply);
 
 // Internal notes on a ticket. Authorship is checked in the service.
 ticketsRouter.post('/:id/notes', controller.addNote);

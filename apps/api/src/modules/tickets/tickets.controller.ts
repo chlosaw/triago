@@ -1,9 +1,17 @@
-import { AcceptTicketBody, CreateTicketBody, MAX_ATTACHMENT_BYTES, NoteBody, PatchTicketBody } from '@triago/shared';
+import {
+  AcceptTicketBody,
+  CreateTicketBody,
+  MAX_ATTACHMENT_BYTES,
+  NoteBody,
+  PatchTicketBody,
+  ReplyBody
+} from '@triago/shared';
 import type { Request, Response } from 'express';
 import { HttpError } from '../../lib/errors.js';
 import { getAuth } from '../../middleware/auth.js';
 import * as attachments from './attachments.service.js';
 import * as notes from './notes.service.js';
+import * as replies from './replies.service.js';
 import { AttachmentId, ListQuery, NoteId, TicketId } from './tickets.schema.js';
 import * as tickets from './tickets.service.js';
 
@@ -73,6 +81,11 @@ export async function returnToQueue(req: Request, res: Response) {
 export async function remove(req: Request, res: Response) {
   await tickets.deleteTicket(getAuth(req).orgId, TicketId.parse(req.params.id));
   res.status(204).end();
+}
+
+export async function reply(req: Request, res: Response) {
+  const { body } = ReplyBody.parse(req.body);
+  res.status(201).json(await replies.sendReply(getAuth(req), TicketId.parse(req.params.id), body));
 }
 
 export async function addNote(req: Request, res: Response) {

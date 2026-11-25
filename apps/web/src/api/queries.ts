@@ -18,6 +18,7 @@ import type {
   Organisation,
   OrgSettings,
   Priority,
+  ReplyResult,
   Stats,
   StatsRange,
   SettableStatus,
@@ -241,6 +242,15 @@ export function useNoteActions(ticketId: string) {
       onSuccess
     })
   };
+}
+
+/** Emails a reply to the ticket's requester; the reply then shows in the conversation. */
+export function useReply(ticketId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) => api<ReplyResult>(`/tickets/${ticketId}/replies`, { method: 'POST', body: { body } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
+  });
 }
 
 export interface SyncResult {
